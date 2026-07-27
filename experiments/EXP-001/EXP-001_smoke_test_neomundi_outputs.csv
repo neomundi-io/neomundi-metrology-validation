@@ -1,0 +1,1 @@
+run_id,case_id,metric_id,metric_version,signal_score,signal_classification,signal_status,threshold_value,threshold_version,computation_status,missing_data_status,technical_explanation,pipeline_version,repository_commit,executed_at,output_version
