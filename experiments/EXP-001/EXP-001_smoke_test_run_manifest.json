@@ -1,0 +1,96 @@
+{
+  "experiment_id": "EXP-001",
+  "run_id": "EXP001-SMOKE-RUN-001",
+  "run_type": "SMOKE_TEST",
+  "status": "DRAFT",
+  "created_at": "2026-07-27T00:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+
+  "objective": {
+    "fr": "Vérifier le fonctionnement technique et méthodologique de la chaîne de validation factuelle.",
+    "scientific_validation": false,
+    "performance_claim_authorized": false
+  },
+
+  "target_event": {
+    "target_event_id": "EVT-003",
+    "name_fr": "Erreur factuelle significative",
+    "version": "v0.1"
+  },
+
+  "claim": {
+    "claim_id": "CLM-003",
+    "name_fr": "NeoMundi produit des signaux de risque factuel",
+    "status_before_run": "HYPOTHETICAL"
+  },
+
+  "metric": {
+    "metric_id": "MET-003",
+    "name_fr": "Signal de risque factuel",
+    "metric_version": "TO_BE_DEFINED",
+    "implementation_location": "TO_BE_DEFINED",
+    "threshold_version": "TO_BE_DEFINED",
+    "threshold_value": null
+  },
+
+  "corpus": {
+    "corpus_id": "EXP001-SMOKE-20",
+    "file": "experiments/EXP-001/EXP-001_smoke_test_20_cases_FR.csv",
+    "version": "v0.1",
+    "expected_case_count": 20,
+    "expected_positive_count": 10,
+    "expected_negative_count": 10,
+    "sha256": "TO_BE_GENERATED",
+    "freeze_status": "DRAFT"
+  },
+
+  "baseline": {
+    "name_fr": "Baseline indépendante de factualité",
+    "protocol_file": "experiments/EXP-001/EXP-001_factuality_baseline_FR.md",
+    "version": "v0.1",
+    "implementation": "TO_BE_DEFINED",
+    "judge_model": null,
+    "judge_version": null,
+    "temperature": null
+  },
+
+  "validation": {
+    "corpus_validator": "scripts/validate_exp001_smoke_test.py",
+    "validator_version": "v0.1",
+    "workflow": ".github/workflows/validate-exp001-smoke-test.yml",
+    "labels_hidden_from_tested_signal": true,
+    "baseline_independent_from_neomundi": true
+  },
+
+  "expected_outputs": {
+    "neomundi_outputs": "results/EXP-001/EXP-001_smoke_test_neomundi_outputs.csv",
+    "baseline_outputs": "results/EXP-001/EXP-001_smoke_test_baseline_outputs.csv",
+    "confusion_matrix": "results/EXP-001/EXP-001_smoke_test_confusion_matrix.csv",
+    "error_log": "results/EXP-001/EXP-001_smoke_test_error_log.csv",
+    "report_fr": "results/EXP-001/EXP-001_smoke_test_report_FR.md"
+  },
+
+  "environment": {
+    "python_version": "3.12",
+    "operating_system": "TO_BE_RECORDED",
+    "repository_commit": "TO_BE_RECORDED",
+    "pipeline_version": "TO_BE_RECORDED",
+    "dependencies_file": "TO_BE_DEFINED"
+  },
+
+  "authorization": {
+    "protocol_frozen": false,
+    "corpus_frozen": false,
+    "execution_authorized": false,
+    "authorized_by": "Sebastien",
+    "authorization_date": null
+  },
+
+  "limitations": [
+    "Corpus synthétique composé de cas simples.",
+    "Taille insuffisante pour une validation statistique.",
+    "Les résultats ne peuvent soutenir aucune affirmation générale de performance.",
+    "La métrique et son seuil doivent être figés avant exécution."
+  ]
+}
