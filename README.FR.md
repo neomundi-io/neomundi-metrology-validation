@@ -1,3 +1,5 @@
+**Français** | [English](README.md)
+
 # NeoMundi — Validation métrologique
 
 Repository dédié à la consolidation méthodologique, à la validation et à la reproductibilité des mesures NeoMundi.
