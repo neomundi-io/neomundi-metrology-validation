@@ -1,3 +1,5 @@
+[Français](README_FR.md) | **English**
+
 # NeoMundi Metrology Validation
 
 Repository dedicated to the methodological consolidation, validation and reproducibility of NeoMundi measurements.
@@ -35,4 +37,4 @@ Initial methodological consolidation phase.
 
 ## Visibility
 
-Private repository.
+Public repository.
