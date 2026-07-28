@@ -1,4 +1,4 @@
-[Français](README_FR.md) | **English**
+[Français](README.FR.md) | **English**
 
 # NeoMundi Metrology Validation
 
