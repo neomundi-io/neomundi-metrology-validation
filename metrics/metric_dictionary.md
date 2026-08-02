@@ -1,289 +1,119 @@
-# NeoMundi Metric Dictionary
-
-## Purpose
-
-This document defines the official NeoMundi metrics, their intended meaning, calculation status, interpretation limits and validation requirements.
-
-A metric must not be presented as validated until its definition, implementation, calibration and validation status are documented.
-
----
-
-## Metric status vocabulary
-
-- **Exploratory**: concept or signal under investigation
-- **Defined**: purpose and interpretation are documented
-- **Implemented**: calculation exists in the NeoMundi pipeline
-- **Tested**: calculation has been checked on controlled cases
-- **Calibrated**: thresholds or interpretation ranges have been estimated
-- **Validated**: performance has been measured against a documented reference
-- **Replicated**: results have been reproduced on another campaign or environment
-
----
-
-## Standard metric record
-
-Each metric must contain:
-
-- Metric ID
-- Official name
-- Version
-- Current status
-- Measurement objective
-- Target phenomenon
-- Inputs
-- Formula or algorithm
-- Output type
-- Unit or scale
-- Expected range
-- Interpretation
-- Thresholds
-- Missing-data behaviour
-- Dependencies
-- Sensitivity factors
-- Known limitations
-- Non-claims
-- Numerical example
-- Validation reference
-- Required validation test
-- Implementation location
-- Evidence location
-- Decision owner
-- Last review date
-
----
-
-# MET-001 — Stability Score
-
-## Identification
-
-- **Metric ID:** MET-001
-- **Official name:** Stability Score
-- **Version:** To be frozen
-- **Current status:** Implemented — methodological definition pending consolidation
-
-## Definition
-
-- **Measurement objective:** Measure variation across repeated executions of the same case.
-- **Target phenomenon:** Response stability under a controlled repeated-execution protocol.
-- **Inputs:** To be documented from the current implementation.
-- **Formula or algorithm:** To be extracted and frozen from the current code.
-- **Output type:** Numerical score.
-- **Unit or scale:** To be confirmed.
-- **Expected range:** To be confirmed.
-
-## Interpretation
-
-- **Interpretation:** To be formally defined.
-- **Thresholds:** Not yet methodologically frozen.
-- **Missing-data behaviour:** To be documented.
-- **Dependencies:** Repetition protocol, semantic representation and aggregation method.
-- **Sensitivity factors:** Model, prompt, parameters, embedding model, number of repetitions and response length.
-
-## Limitations
-
-- Stability does not imply factual correctness.
-- Stability does not imply compliance.
-- A variable response may remain correct.
-- A stable response may remain systematically false.
-
-## Validation
-
-- **Validation reference:** Human-reviewed repeated-response corpus.
-- **Required validation test:** Intra-prompt analysis and comparison with a semantic-similarity baseline.
-- **Implementation location:** To be added.
-- **Evidence location:** To be added.
-- **Decision owner:** Sébastien
-- **Last review date:** 2026-07-27
-
----
-
-# MET-002 — Semantic Variation Rate
-
-## Identification
-
-- **Metric ID:** MET-002
-- **Official name:** Semantic Variation Rate
-- **Version:** To be frozen
-- **Current status:** Implemented — methodological definition pending consolidation
-
-## Definition
-
-- **Measurement objective:** Identify meaningful semantic divergence across repeated responses.
-- **Target phenomenon:** Semantic variation between executions of the same case.
-- **Inputs:** To be documented from the current implementation.
-- **Formula or algorithm:** To be extracted and frozen from the current code.
-- **Output type:** Numerical rate or classification.
-- **Unit or scale:** To be confirmed.
-- **Expected range:** To be confirmed.
-
-## Interpretation
-
-- **Interpretation:** To be formally defined.
-- **Thresholds:** Not yet methodologically frozen.
-- **Missing-data behaviour:** To be documented.
-- **Dependencies:** Embedding model, similarity method, clustering or thresholding method.
-- **Sensitivity factors:** Response length, language, paraphrase and embedding version.
-
-## Limitations
-
-- Semantic variation does not automatically indicate an error.
-- Lexical variation may occur without meaningful semantic variation.
-- Similar wording may conceal factual or logical disagreement.
-
-## Validation
-
-- **Validation reference:** Human-labelled semantic-variation corpus.
-- **Required validation test:** Confusion matrix against labelled cases.
-- **Implementation location:** To be added.
-- **Evidence location:** To be added.
-- **Decision owner:** Sébastien
-- **Last review date:** 2026-07-27
-
----
-
 # MET-003 — Factual Risk Signal
 
 ## Identification
 
 - **Metric ID:** MET-003
 - **Official name:** Factual Risk Signal
-- **Version:** To be frozen
-- **Current status:** Exploratory or implemented — status to be confirmed
+- **Implemented field name:** `factual_hallucination_score`
+- **Legacy alias:** `hallucination_score`
+- **Version:** Backend implementation observed on 2026-08-02 — pipeline version and commit to be frozen
+- **Current status:** Implemented — methodological calibration and validation pending
 
 ## Definition
 
-- **Measurement objective:** Produce a signal associated with a possible significant factual error.
-- **Target phenomenon:** Factual-risk event defined against an objective or expert-validated reference.
-- **Inputs:** To be documented.
-- **Formula or algorithm:** To be documented.
-- **Output type:** Signal, score or classification.
-- **Unit or scale:** To be confirmed.
-- **Expected range:** To be confirmed.
+- **Measurement objective:** Produce a score associated with the degree of factual incorrectness in a response, while separating this signal from prompt instability or ambiguity.
+- **Target phenomenon:** Potential presence, in the evaluated response, of demonstrably false, fabricated, misleading or off-topic claims.
+- **Inputs:**
+  - evaluated model response;
+  - associated prompt;
+  - judge system prompt;
+  - configured judge model;
+  - judge endpoint;
+  - execution parameters;
+  - configured classification threshold.
+- **Formula or algorithm:** Evaluation by an `LLM-as-Judge` model. The judge receives the prompt and response and is instructed to return a JSON object containing, among other fields, `factual_hallucination_score`, `semantic_instability_score`, `confidence`, `reasoning` and `suspect_phrases`. The returned factual score is converted to a number, clamped to the `[0,1]` interval using `clamp01`, and rounded to four decimal places. The boolean classification is produced by comparing the score with a configurable threshold.
+- **Output type:**
+  - numerical `factual_hallucination_score`;
+  - boolean `is_hallucinated` classification;
+  - confidence score;
+  - short reasoning;
+  - suspect passages;
+  - judge-model and latency information.
+- **Unit or scale:** Unitless score between `0` and `1`.
+- **Expected range:** `[0,1]`.
+- **Internal interpretation convention:**
+  - `0` represents no factual risk detected by the judge;
+  - `1` represents a response assessed by the judge as entirely false or off-topic.
 
 ## Interpretation
 
-- **Interpretation:** Risk signal requiring contextual validation.
-- **Thresholds:** Not yet validated.
-- **Missing-data behaviour:** To be documented.
-- **Dependencies:** Reference source, judge configuration and classification method.
-- **Sensitivity factors:** Domain, language, source quality, judge model and prompt design.
+- **Interpretation:** The higher the score, the more strongly the judge model estimates that the response contains a significant factual error or is off-topic. The result is a risk signal and not independent proof of falsity.
+- **Thresholds:** The `is_hallucinated` classification is calculated when `factual_hallucination_score >= threshold`. The exact operational threshold value must still be located, documented and frozen before executing `EXP-001`.
+- **Suspect-phrase extraction:** The judge prompt requests `suspect_phrases` when the factual score is greater than `0.3`. This value governs suspect-passage extraction and must not automatically be treated as the classification threshold.
+- **Missing-data or unavailability behaviour:**
+  - an empty response currently produces a factual score of `0.0`, a negative classification and a confidence of `0.0`, with the reasoning `Empty response`;
+  - when no judge API key is configured or detection is unavailable, the system returns a fallback result with a factual score of `0.0`, a negative classification, a confidence of `0.0` and a fallback marker;
+  - a fallback score of `0.0` must not be interpreted as confirmation that the response is factually correct.
+- **Dependencies:**
+  - judge-model availability and version;
+  - judge endpoint and configuration;
+  - evaluation system prompt;
+  - JSON parser;
+  - `clamp01` function;
+  - classification threshold;
+  - fallback logic.
+- **Sensitivity factors:**
+  - judge model;
+  - judge-model version;
+  - evaluation-prompt wording;
+  - language;
+  - domain;
+  - response length and complexity;
+  - prompt ambiguity;
+  - quality of implicit or explicit references;
+  - threshold configuration;
+  - judge-backend availability.
+
+## Numerical example
+
+Illustrative example only:
+
+- score returned by the judge: `0.72`;
+- configured threshold: `0.50`;
+- result: `is_hallucinated = true`.
+
+This example does not represent a recommended or validated threshold.
 
 ## Limitations
 
+- The score is produced by a judge model and not by deterministic factual verification.
+- The judge model may produce false positives and false negatives.
 - A factual-risk signal is not proof that a response is false.
 - Absence of an alert is not proof that a response is true.
-- Performance may vary by domain and reference type.
+- The score depends on the configuration, version and behaviour of the judge model.
+- Performance may vary by domain, language and reference type.
+- An empty response or judge unavailability may currently produce a fallback score of `0.0`.
+- The score must not be presented as an autonomous measure of truth.
+- The threshold must not be presented as calibrated or universal before validation.
+- Separation between factual risk and semantic instability depends on the judge model’s ability to distinguish these phenomena.
+
+## Non-claims
+
+- MET-003 does not certify the truth of a response.
+- MET-003 is not legal, scientific or expert proof of falsity.
+- MET-003 does not guarantee the absence of hallucination when the score is low.
+- MET-003 is not a universal measurement independent of the judge model.
+- MET-003 must not be used alone to allow or block a high-impact decision before calibration and validation.
 
 ## Validation
 
-- **Validation reference:** Objective ground truth or independent expert review.
-- **Required validation test:** Positive and negative control study with confusion matrix.
-- **Implementation location:** To be added.
-- **Evidence location:** To be added.
+- **Validation reference:** Objective ground truth, verifiable references or independent expert review, with annotators blinded to NeoMundi scores.
+- **Required validation test:**
+  - positive and negative controls;
+  - confusion matrix;
+  - precision;
+  - recall;
+  - specificity;
+  - false-positive rate;
+  - false-negative rate;
+  - error analysis;
+  - comparison with an independent factual baseline;
+  - analysis by domain, language and case type;
+  - testing of empty-response and judge-unavailability behaviour.
+- **Implementation location:** `govern-v3/app/core/hallucination_detector.py`
+- **Existing tests identified:** `govern-v3/tests/test_core/test_hallucination.py`
+- **Evidence location:** To be produced in `EXP-001` after the corpus, threshold, judge configuration and protocol have been frozen.
 - **Decision owner:** Sébastien
-- **Last review date:** 2026-07-27
+- **Last review date:** 2026-08-02
 
 ---
-
-# MET-004 — Longitudinal Drift Signal
-
-## Identification
-
-- **Metric ID:** MET-004
-- **Official name:** Longitudinal Drift Signal
-- **Version:** To be frozen
-- **Current status:** Measured — validation pending
-
-## Definition
-
-- **Measurement objective:** Detect sustained changes relative to a frozen baseline.
-- **Target phenomenon:** Longitudinal change across comparable campaigns.
-- **Inputs:** To be documented.
-- **Formula or algorithm:** To be documented.
-- **Output type:** Signal or score.
-- **Unit or scale:** To be confirmed.
-- **Expected range:** To be confirmed.
-
-## Interpretation
-
-- **Interpretation:** Change relative to a defined baseline and protocol.
-- **Thresholds:** To be calibrated.
-- **Missing-data behaviour:** To be documented.
-- **Dependencies:** Stable corpus, protocol versioning and campaign comparability.
-- **Sensitivity factors:** Model updates, provider changes, judge changes, corpus changes and sampling variation.
-
-## Limitations
-
-- A change does not automatically represent degradation.
-- A one-off variation is not necessarily a drift.
-- Drift detection does not imply prediction of future failure.
-
-## Validation
-
-- **Validation reference:** Repeated fixed-corpus campaigns.
-- **Required validation test:** Multi-campaign longitudinal comparison.
-- **Implementation location:** To be added.
-- **Evidence location:** To be added.
-- **Decision owner:** Sébastien
-- **Last review date:** 2026-07-27
-
----
-
-# MET-005 — Delta G
-
-## Identification
-
-- **Metric ID:** MET-005
-- **Official name:** Delta G
-- **Version:** To be frozen
-- **Current status:** Exploratory or implemented — exact status to be confirmed
-
-## Definition
-
-- **Measurement objective:** To be formally specified.
-- **Target phenomenon:** To be formally specified.
-- **Inputs:** To be extracted from the current implementation.
-- **Formula or algorithm:** To be extracted and frozen from the current code.
-- **Output type:** Numerical value.
-- **Unit or scale:** To be confirmed.
-- **Expected range:** To be confirmed.
-
-## Interpretation
-
-- **Interpretation:** Not yet frozen.
-- **Thresholds:** Not yet methodologically validated.
-- **Missing-data behaviour:** To be documented.
-- **Dependencies:** To be documented.
-- **Sensitivity factors:** Prompt, model, response length, tokenization and runtime configuration.
-
-## Limitations
-
-- A high Delta G value must not automatically be interpreted as an error.
-- The metric must not be presented as thermodynamic proof without separate validation.
-- Universal thresholds must not be claimed before cross-context calibration.
-
-## Validation
-
-- **Validation reference:** To be defined.
-- **Required validation test:** Sensitivity, ablation, controlled perturbation and baseline comparison.
-- **Implementation location:** To be added.
-- **Evidence location:** To be added.
-- **Decision owner:** Sébastien
-- **Last review date:** 2026-07-27
-
----
-
-## Pending metrics
-
-The following metrics must be added after extraction from the current pipeline:
-
-- Coherence
-- Compliance
-- Runtime R
-- Information Density
-- Energy
-- Latency
-- Cost
-- Regime Classification
-- Trajectory Metrics
-- Oracle Law E Candidate Metrics
