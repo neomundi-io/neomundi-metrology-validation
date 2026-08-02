@@ -6,7 +6,7 @@
 - **Nom officiel :** Signal de risque factuel
 - **Nom du champ implémenté :** `factual_hallucination_score`
 - **Alias historique :** `hallucination_score`
-- **Version :** implémentation backend observée le 2 août 2026 — commit et version du pipeline à figer
+- **Version :** implémentation backend observée le 2 août 2026 — seuil par défaut `0.5` ; commit et version du pipeline à figer
 - **Statut actuel :** implémenté — calibration et validation méthodologique en attente
 
 ## Définition
@@ -21,7 +21,7 @@
   - endpoint du juge ;
   - paramètres d’exécution ;
   - seuil de classification configuré.
-- **Formule ou algorithme :** évaluation par un modèle juge de type `LLM-as-Judge`. Le juge reçoit le prompt et la réponse, puis doit retourner un objet JSON comprenant notamment `factual_hallucination_score`, `semantic_instability_score`, `confidence`, `reasoning` et `suspect_phrases`. Le score factuel retourné est converti en nombre, borné dans l’intervalle `[0,1]` avec `clamp01`, puis arrondi à quatre décimales. La classification booléenne est produite par comparaison du score à un seuil configurable.
+- **Formule ou algorithme :** évaluation par un modèle juge de type `LLM-as-Judge`. Le juge reçoit le prompt et la réponse, puis retourne un objet JSON comprenant notamment `factual_hallucination_score`, `semantic_instability_score`, `confidence`, `reasoning` et `suspect_phrases`. Le score factuel retourné est converti en nombre, borné dans l’intervalle `[0,1]` avec `clamp01`, puis arrondi à quatre décimales. La classification booléenne est produite par comparaison du score à un seuil configurable.
 - **Type de sortie :**
   - score numérique `factual_hallucination_score` ;
   - classification booléenne `is_hallucinated` ;
@@ -38,8 +38,8 @@
 ## Interprétation
 
 - **Interprétation :** plus le score est élevé, plus le modèle juge estime que la réponse contient une erreur factuelle importante ou qu’elle est hors sujet. Ce résultat constitue un signal de risque et non une preuve indépendante de fausseté.
-- **Seuils :** la classification `is_hallucinated` est calculée lorsque `factual_hallucination_score >= threshold`. La valeur opérationnelle exacte du seuil doit encore être localisée, documentée et figée avant l’exécution de `EXP-001`.
-- **Extraction des passages suspects :** le prompt du juge demande des `suspect_phrases` lorsque le score factuel est supérieur à `0.3`. Cette valeur concerne l’extraction des passages suspects et ne doit pas être assimilée automatiquement au seuil de classification.
+- **Seuils :** par défaut, la classification `is_hallucinated` est calculée lorsque `factual_hallucination_score >= 0.5`. Ce seuil est implémenté dans la fonction `detect_hallucination`, mais il n’est pas encore méthodologiquement calibré ni validé. Il peut être remplacé par une autre valeur lors de l’appel de la fonction.
+- **Extraction des passages suspects :** le prompt du juge demande des `suspect_phrases` lorsque le score factuel est supérieur à `0.3`. Cette valeur concerne l’extraction des passages suspects et ne constitue pas le seuil par défaut de classification.
 - **Données manquantes ou indisponibilité :**
   - une réponse vide produit actuellement un score factuel de `0.0`, une classification négative et une confiance de `0.0`, avec la justification `Empty response` ;
   - en l’absence de clé API du juge ou lorsque la détection est indisponible, le système retourne un résultat de repli avec un score factuel de `0.0`, une classification négative, une confiance de `0.0` et un marqueur de fallback ;
@@ -84,8 +84,8 @@ Cet exemple ne constitue pas un seuil recommandé ou validé.
 - La performance peut varier selon les domaines, les langues et les types de références.
 - Une réponse vide ou une indisponibilité du juge peut actuellement produire un score de repli à `0.0`.
 - Le score ne doit pas être présenté comme une mesure autonome de vérité.
-- Le seuil ne doit pas être présenté comme calibré ou universel avant validation.
-- La séparation entre risque factuel et instabilité sémantique dépend elle-même de la capacité du juge à distinguer ces phénomènes.
+- Le seuil `0.5` ne doit pas être présenté comme calibré, validé ou universel.
+- La séparation entre risque factuel et instabilité sémantique dépend de la capacité du juge à distinguer ces phénomènes.
 
 ## Non-claims
 
@@ -109,8 +109,10 @@ Cet exemple ne constitue pas un seuil recommandé ou validé.
   - analyse des erreurs ;
   - comparaison avec une baseline factuelle indépendante ;
   - analyse par domaine, langue et type de cas ;
-  - test du comportement en cas de réponse vide et d’indisponibilité du juge.
+  - test du comportement en cas de réponse vide et d’indisponibilité du juge ;
+  - comparaison de plusieurs seuils autour de la valeur par défaut `0.5`.
 - **Implémentation :** `govern-v3/app/core/hallucination_detector.py`
+- **Fonction principale :** `detect_hallucination`
 - **Tests existants identifiés :** `govern-v3/tests/test_core/test_hallucination.py`
 - **Preuves :** à produire dans `EXP-001` après gel du corpus, du seuil, de la configuration du juge et du protocole.
 - **Responsable :** Sébastien.
