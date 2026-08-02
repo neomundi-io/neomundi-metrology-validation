@@ -29,5 +29,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Exécuter le validateur
-        run: python scripts/validate_exp001_smoke_test.py
+      - name: Vérifier la structure du corpus
+        run: |
+          python scripts/validate_exp001_smoke_test.py \
+            --stage structural
+
+      - name: Vérifier la documentation des références
+        run: |
+          python scripts/validate_exp001_smoke_test.py \
+            --stage documented
