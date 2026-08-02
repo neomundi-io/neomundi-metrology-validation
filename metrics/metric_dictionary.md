@@ -6,7 +6,7 @@
 - **Official name:** Factual Risk Signal
 - **Implemented field name:** `factual_hallucination_score`
 - **Legacy alias:** `hallucination_score`
-- **Version:** Backend implementation observed on 2026-08-02 — pipeline version and commit to be frozen
+- **Version:** Backend implementation observed on 2026-08-02 — default threshold `0.5`; pipeline version and commit to be frozen
 - **Current status:** Implemented — methodological calibration and validation pending
 
 ## Definition
@@ -21,7 +21,7 @@
   - judge endpoint;
   - execution parameters;
   - configured classification threshold.
-- **Formula or algorithm:** Evaluation by an `LLM-as-Judge` model. The judge receives the prompt and response and is instructed to return a JSON object containing, among other fields, `factual_hallucination_score`, `semantic_instability_score`, `confidence`, `reasoning` and `suspect_phrases`. The returned factual score is converted to a number, clamped to the `[0,1]` interval using `clamp01`, and rounded to four decimal places. The boolean classification is produced by comparing the score with a configurable threshold.
+- **Formula or algorithm:** Evaluation by an `LLM-as-Judge` model. The judge receives the prompt and response and returns a JSON object containing, among other fields, `factual_hallucination_score`, `semantic_instability_score`, `confidence`, `reasoning` and `suspect_phrases`. The returned factual score is converted to a number, clamped to the `[0,1]` interval using `clamp01`, and rounded to four decimal places. The boolean classification is produced by comparing the score with a configurable threshold.
 - **Output type:**
   - numerical `factual_hallucination_score`;
   - boolean `is_hallucinated` classification;
@@ -38,8 +38,8 @@
 ## Interpretation
 
 - **Interpretation:** The higher the score, the more strongly the judge model estimates that the response contains a significant factual error or is off-topic. The result is a risk signal and not independent proof of falsity.
-- **Thresholds:** The `is_hallucinated` classification is calculated when `factual_hallucination_score >= threshold`. The exact operational threshold value must still be located, documented and frozen before executing `EXP-001`.
-- **Suspect-phrase extraction:** The judge prompt requests `suspect_phrases` when the factual score is greater than `0.3`. This value governs suspect-passage extraction and must not automatically be treated as the classification threshold.
+- **Thresholds:** By default, the `is_hallucinated` classification is calculated when `factual_hallucination_score >= 0.5`. This threshold is implemented in the `detect_hallucination` function, but it has not yet been methodologically calibrated or validated. It can be overridden with another value when the function is called.
+- **Suspect-phrase extraction:** The judge prompt requests `suspect_phrases` when the factual score is greater than `0.3`. This value governs suspect-passage extraction and is not the default classification threshold.
 - **Missing-data or unavailability behaviour:**
   - an empty response currently produces a factual score of `0.0`, a negative classification and a confidence of `0.0`, with the reasoning `Empty response`;
   - when no judge API key is configured or detection is unavailable, the system returns a fallback result with a factual score of `0.0`, a negative classification, a confidence of `0.0` and a fallback marker;
@@ -84,7 +84,7 @@ This example does not represent a recommended or validated threshold.
 - Performance may vary by domain, language and reference type.
 - An empty response or judge unavailability may currently produce a fallback score of `0.0`.
 - The score must not be presented as an autonomous measure of truth.
-- The threshold must not be presented as calibrated or universal before validation.
+- The `0.5` threshold must not be presented as calibrated, validated or universal.
 - Separation between factual risk and semantic instability depends on the judge model’s ability to distinguish these phenomena.
 
 ## Non-claims
@@ -109,8 +109,10 @@ This example does not represent a recommended or validated threshold.
   - error analysis;
   - comparison with an independent factual baseline;
   - analysis by domain, language and case type;
-  - testing of empty-response and judge-unavailability behaviour.
+  - testing of empty-response and judge-unavailability behaviour;
+  - comparison of several thresholds around the default `0.5` value.
 - **Implementation location:** `govern-v3/app/core/hallucination_detector.py`
+- **Main function:** `detect_hallucination`
 - **Existing tests identified:** `govern-v3/tests/test_core/test_hallucination.py`
 - **Evidence location:** To be produced in `EXP-001` after the corpus, threshold, judge configuration and protocol have been frozen.
 - **Decision owner:** Sébastien
