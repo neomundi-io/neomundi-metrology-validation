@@ -5,12 +5,14 @@ on:
     paths:
       - "experiments/EXP-001/EXP-001_smoke_test_20_cases_FR.csv"
       - "scripts/validate_exp001_smoke_test.py"
+      - "scripts/hash_exp001_corpus.py"
       - ".github/workflows/validate-exp001-smoke-test.yml"
 
   pull_request:
     paths:
       - "experiments/EXP-001/EXP-001_smoke_test_20_cases_FR.csv"
       - "scripts/validate_exp001_smoke_test.py"
+      - "scripts/hash_exp001_corpus.py"
       - ".github/workflows/validate-exp001-smoke-test.yml"
 
   workflow_dispatch:
@@ -38,6 +40,10 @@ jobs:
         run: |
           python scripts/validate_exp001_smoke_test.py \
             --stage documented
+
+      - name: Calculer le hash SHA-256 du corpus
+        run: |
+          python scripts/hash_exp001_corpus.py
 
       - name: Vérifier la préparation au gel
         continue-on-error: true
