@@ -4,6 +4,7 @@
   "run_type": "SMOKE_TEST",
   "status": "DRAFT",
   "created_at": "2026-07-27T00:00:00Z",
+  "last_updated_at": "2026-08-02T00:00:00Z",
   "started_at": null,
   "completed_at": null,
 
@@ -22,16 +23,31 @@
   "claim": {
     "claim_id": "CLM-003",
     "name_fr": "NeoMundi produit des signaux de risque factuel",
-    "status_before_run": "HYPOTHETICAL"
+    "status_before_run": "HYPOTHETICAL",
+    "new_claim_authorized_after_smoke_test": false
   },
 
   "metric": {
     "metric_id": "MET-003",
     "name_fr": "Signal de risque factuel",
-    "metric_version": "TO_BE_DEFINED",
-    "implementation_location": "TO_BE_DEFINED",
-    "threshold_version": "TO_BE_DEFINED",
-    "threshold_value": null
+    "implemented_field_name": "factual_hallucination_score",
+    "legacy_alias": "hallucination_score",
+    "metric_version": "BACKEND_IMPLEMENTATION_OBSERVED_2026-08-02_UNFROZEN",
+    "implementation_location": "govern-v3/app/core/hallucination_detector.py",
+    "main_function": "detect_hallucination",
+    "mechanism": "LLM_AS_JUDGE",
+    "score_range": [
+      0.0,
+      1.0
+    ],
+    "threshold_version": "DEFAULT_THRESHOLD_OBSERVED_2026-08-02_UNCALIBRATED",
+    "threshold_value": 0.5,
+    "threshold_operator": ">=",
+    "classification_field": "is_hallucinated",
+    "suspect_phrases_extraction_threshold": 0.3,
+    "calibrated": false,
+    "validated": false,
+    "implementation_commit": "TO_BE_FROZEN"
   },
 
   "corpus": {
@@ -41,26 +57,73 @@
     "expected_case_count": 20,
     "expected_positive_count": 10,
     "expected_negative_count": 10,
-    "sha256": "TO_BE_GENERATED",
+    "expected_pair_count": 10,
+    "origin_type": "SYNTHETIC",
+    "sha256_algorithm": "SHA-256",
+    "sha256": "c1f819f4590881a2c5fc44661d077b3d30cc4dd54975e49548f5581b64be698a",
+    "size_bytes": 14438,
+    "hash_calculated_by": "scripts/hash_exp001_corpus.py",
+    "hash_calculated_in": "GitHub Actions",
+    "references_documented": true,
+    "references_versioned": true,
+    "human_review_completed": true,
+    "splits_assigned": true,
+    "split_distribution": {
+      "CALIBRATION": 12,
+      "VALIDATION": 4,
+      "FINAL_TEST": 4
+    },
     "freeze_status": "DRAFT"
   },
 
   "baseline": {
-    "name_fr": "Baseline indépendante de factualité",
+    "name_fr": "Baseline déterministe indépendante de factualité",
     "protocol_file": "experiments/EXP-001/EXP-001_factuality_baseline_FR.md",
     "version": "v0.1",
-    "implementation": "TO_BE_DEFINED",
+    "implementation": "DETERMINISTIC_REFERENCE_COMPARISON",
+    "decision_classes": [
+      "FACTUALLY_CORRECT",
+      "FACTUALLY_INCORRECT",
+      "UNDETERMINED"
+    ],
     "judge_model": null,
     "judge_version": null,
-    "temperature": null
+    "temperature": null,
+    "independent_from_neomundi": true,
+    "freeze_status": "DRAFT"
+  },
+
+  "review": {
+    "review_status": "COMPLETED_FOR_20_CASES",
+    "primary_reviewer": "Sebastien",
+    "reviewer_blinded_to_neomundi_outputs": true,
+    "second_review_required": false,
+    "arbitration_required": false,
+    "approved_case_count": 20,
+    "rejected_case_count": 0,
+    "excluded_case_count": 0
   },
 
   "validation": {
     "corpus_validator": "scripts/validate_exp001_smoke_test.py",
-    "validator_version": "v0.1",
+    "validator_version": "MULTI_STAGE_2026-08-02",
+    "hash_script": "scripts/hash_exp001_corpus.py",
     "workflow": ".github/workflows/validate-exp001-smoke-test.yml",
     "labels_hidden_from_tested_signal": true,
-    "baseline_independent_from_neomundi": true
+    "baseline_independent_from_neomundi": true,
+    "structural_stage": {
+      "status": "PASSED",
+      "blocking": true
+    },
+    "documented_stage": {
+      "status": "PASSED",
+      "blocking": true
+    },
+    "frozen_stage": {
+      "status": "NOT_PASSED",
+      "blocking_reason": "All 20 cases still have freeze_status set to DRAFT.",
+      "informational_in_workflow": true
+    }
   },
 
   "expected_outputs": {
@@ -73,24 +136,61 @@
 
   "environment": {
     "python_version": "3.12",
-    "operating_system": "TO_BE_RECORDED",
-    "repository_commit": "TO_BE_RECORDED",
-    "pipeline_version": "TO_BE_RECORDED",
+    "validation_operating_system": "GitHub Actions ubuntu-latest",
+    "execution_operating_system": "TO_BE_RECORDED",
+    "repository_branch": "main",
+    "repository_commit": "TO_BE_RECORDED_AFTER_FINAL_FREEZE_COMMIT",
+    "pipeline_version": "TO_BE_FROZEN",
+    "judge_model": "TO_BE_RECORDED",
+    "judge_model_version": "TO_BE_RECORDED",
+    "judge_endpoint_type": "TO_BE_RECORDED",
     "dependencies_file": "TO_BE_DEFINED"
   },
 
   "authorization": {
+    "metric_frozen": false,
+    "threshold_frozen": false,
+    "baseline_frozen": false,
     "protocol_frozen": false,
     "corpus_frozen": false,
+    "environment_recorded": false,
     "execution_authorized": false,
     "authorized_by": "Sebastien",
     "authorization_date": null
   },
 
+  "pre_execution_checklist": {
+    "metric_documented": true,
+    "implementation_identified": true,
+    "default_threshold_documented": true,
+    "baseline_defined": true,
+    "references_documented": true,
+    "references_versioned": true,
+    "human_review_completed": true,
+    "splits_assigned": true,
+    "corpus_hashed": true,
+    "metric_frozen": false,
+    "threshold_frozen": false,
+    "baseline_frozen": false,
+    "protocol_frozen": false,
+    "corpus_frozen": false,
+    "repository_commit_recorded": false,
+    "execution_environment_recorded": false,
+    "frozen_validation_passed": false,
+    "execution_authorized": false
+  },
+
   "limitations": [
-    "Corpus synthétique composé de cas simples.",
-    "Taille insuffisante pour une validation statistique.",
+    "Le corpus est synthétique et composé de cas fermés simples.",
+    "La taille de 20 cas est insuffisante pour une validation statistique.",
+    "L’équilibre de 10 cas positifs et 10 cas négatifs ne représente pas une prévalence réelle.",
     "Les résultats ne peuvent soutenir aucune affirmation générale de performance.",
-    "La métrique et son seuil doivent être figés avant exécution."
-  ]
+    "Le seuil 0.5 est implémenté mais n’est ni calibré ni validé.",
+    "Le signal repose sur un modèle juge et peut produire des faux positifs et des faux négatifs.",
+    "Une réussite du smoke test confirmerait uniquement le fonctionnement technique de la chaîne expérimentale."
+  ],
+
+  "next_step": {
+    "fr": "Figer formellement la métrique, le seuil, la baseline, le protocole et le corpus, puis enregistrer le commit GitHub final et l’environnement avant toute autorisation d’exécution."
+  }
 }
