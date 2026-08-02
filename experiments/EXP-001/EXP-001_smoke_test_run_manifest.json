@@ -5,7 +5,7 @@
   "run_type": "SMOKE_TEST",
   "status": "FROZEN_PENDING_ENVIRONMENT",
   "created_at": "2026-07-27T00:00:00Z",
-  "last_updated_at": "2026-08-02T15:22:00Z",
+  "last_updated_at": "2026-08-02T15:26:00Z",
   "started_at": null,
   "completed_at": null,
 
@@ -120,6 +120,7 @@
     "metric_id": "MET-003",
     "target_event_id": "EVT-003",
     "threshold_value": 0.5,
+    "threshold_operator": ">=",
     "implementation_commit": "f02f7ff",
     "freeze_status": "FROZEN",
     "freeze_date": "2026-08-02"
@@ -160,6 +161,17 @@
     }
   },
 
+  "repository_freeze": {
+    "repository": "neomundi-metrology-validation",
+    "repository_visibility": "PRIVATE",
+    "branch": "main",
+    "freeze_anchor_commit": "7b29408",
+    "freeze_anchor_role": "EXPERIMENTAL_REPOSITORY_AUDIT_ANCHOR",
+    "freeze_anchor_recorded": true,
+    "freeze_anchor_date": "2026-08-02",
+    "note_fr": "Le commit 7b29408 constitue l’ancre du repository expérimental après gel de la métrique, du seuil, de la baseline, du protocole, du corpus et mise à jour initiale du manifeste. Les commits ultérieurs de documentation du manifeste ne modifient pas les éléments expérimentaux gelés."
+  },
+
   "expected_outputs": {
     "neomundi_outputs": "results/EXP-001/EXP-001_smoke_test_neomundi_outputs.csv",
     "baseline_outputs": "results/EXP-001/EXP-001_smoke_test_baseline_outputs.csv",
@@ -169,11 +181,11 @@
   },
 
   "environment": {
-    "python_version": "3.12",
+    "validation_python_version": "3.12",
     "validation_operating_system": "GitHub Actions ubuntu-latest",
     "execution_operating_system": "TO_BE_RECORDED",
     "repository_branch": "main",
-    "repository_commit": "TO_BE_RECORDED_AFTER_MANIFEST_COMMIT",
+    "repository_freeze_anchor_commit": "7b29408",
     "backend_implementation_commit": "f02f7ff",
     "pipeline_version": "BACKEND_IMPLEMENTATION_f02f7ff",
     "judge_model": "TO_BE_RECORDED",
@@ -194,8 +206,8 @@
     "protocol_frozen": true,
     "corpus_frozen": true,
     "frozen_validation_passed": true,
+    "repository_freeze_anchor_recorded": true,
     "environment_recorded": false,
-    "repository_commit_recorded": false,
     "execution_authorized": false,
     "authorized_by": "Sebastien",
     "authorization_date": null
@@ -218,13 +230,12 @@
     "protocol_frozen": true,
     "corpus_frozen": true,
     "frozen_validation_passed": true,
-    "repository_commit_recorded": false,
+    "repository_freeze_anchor_recorded": true,
     "execution_environment_recorded": false,
     "execution_authorized": false
   },
 
   "execution_blockers": [
-    "Le commit final du repository expérimental doit être enregistré.",
     "Le système d’exploitation utilisé pour l’exécution doit être enregistré.",
     "Le modèle juge et sa version doivent être enregistrés.",
     "Le type d’endpoint du modèle juge doit être enregistré.",
@@ -241,10 +252,11 @@
     "Le seuil 0.5 est figé pour cette expérience mais n’est ni calibré ni validé.",
     "Le signal repose sur un modèle juge et peut produire des faux positifs et des faux négatifs.",
     "Le repository backend est privé et le commit f02f7ff constitue une ancre d’audit interne, pas une preuve publique autonome.",
+    "Le repository expérimental est privé et le commit 7b29408 constitue une ancre d’audit interne.",
     "Une réussite du smoke test confirmerait uniquement le fonctionnement technique de la chaîne expérimentale."
   ],
 
   "next_step": {
-    "fr": "Enregistrer le commit final du repository expérimental et documenter précisément l’environnement d’exécution avant toute autorisation du run."
+    "fr": "Documenter précisément l’environnement d’exécution et les dépendances avant toute autorisation du run."
   }
 }
