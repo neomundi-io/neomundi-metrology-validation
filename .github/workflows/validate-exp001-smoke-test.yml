@@ -38,3 +38,9 @@ jobs:
         run: |
           python scripts/validate_exp001_smoke_test.py \
             --stage documented
+
+      - name: Vérifier la préparation au gel
+        continue-on-error: true
+        run: |
+          python scripts/validate_exp001_smoke_test.py \
+            --stage frozen
