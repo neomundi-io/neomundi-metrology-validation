@@ -360,9 +360,15 @@ L’exécution de la baseline n’est autorisée qu’après :
 - **Cas positifs :** 10
 - **Cas négatifs :** 10
 - **Modèle juge utilisé par la baseline :** aucun
-- **Revue humaine :** obligatoire avant gel
-- **Statut :** `DRAFT`
+- **Méthode :** comparaison déterministe à une référence factuelle documentée et versionnée
+- **Version de la baseline :** `v0.1`
+- **Revue humaine des cas :** terminée
+- **Références documentées :** oui
+- **Références versionnées :** oui
+- **Statut :** `FROZEN`
+- **Date de gel :** 2 août 2026
+- **Modification après gel :** interdite sans création d’une nouvelle version
 - **Exécution autorisée :** non
-- **Prochaine étape :** documenter et versionner les références des 20 cas
-- **Responsable :** Sébastien
+- **Condition restante :** gel du protocole, du corpus, de la métrique et du seuil, puis validation `frozen`
+- **Responsable du gel :** Sébastien
 - **Dernière revue :** 2 août 2026
