@@ -768,11 +768,15 @@ tant que la revue, les splits, le hash et le gel ne sont pas terminés.
 - **Signal étudié :** `MET-003`
 - **Événement cible :** `EVT-003`
 - **Seuil par défaut observé :** `0.5`
-- **Baseline :** déterministe et indépendante
+- **Baseline :** déterministe, indépendante et gelée en version `v0.1`
 - **Validation structurelle :** opérationnelle
 - **Validation documentaire :** opérationnelle
-- **Validation avant gel :** opérationnelle mais non encore satisfaite
-- **Statut :** `DRAFT`
+- **Validation avant gel :** opérationnelle
+- **Statut du protocole :** `FROZEN`
+- **Version du protocole :** `v0.1`
+- **Date de gel :** 2 août 2026
+- **Modification après gel :** interdite sans création d’une nouvelle version
 - **Exécution autorisée :** non
-- **Responsable :** Sébastien
+- **Conditions restantes :** gel de la métrique, du seuil et du corpus, enregistrement du commit final, mise à jour du manifeste et réussite de la validation `frozen`
+- **Responsable du gel :** Sébastien
 - **Dernière revue :** 2 août 2026
