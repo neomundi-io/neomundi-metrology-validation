@@ -1,3 +1,4 @@
+```json
 {
   "experiment_id": "EXP-001",
   "experiment_version": "v0.1",
@@ -5,7 +6,7 @@
   "run_type": "SMOKE_TEST",
   "status": "FROZEN_PENDING_ENVIRONMENT",
   "created_at": "2026-07-27T00:00:00Z",
-  "last_updated_at": "2026-08-02T15:26:00Z",
+  "last_updated_at": "2026-08-08T15:08:45Z",
   "started_at": null,
   "completed_at": null,
 
@@ -183,20 +184,51 @@
   "environment": {
     "validation_python_version": "3.12",
     "validation_operating_system": "GitHub Actions ubuntu-latest",
-    "execution_operating_system": "TO_BE_RECORDED",
+    "execution_host_provider": "Infomaniak",
+    "execution_host_type": "VM",
+    "execution_host_operating_system": "Ubuntu",
+    "execution_container_base_image": "python:3.11-slim",
+    "execution_container_base_operating_system": "Debian",
+    "execution_method": "Docker Compose",
+    "deployment_orchestration": "Ansible",
+    "deployment_command": "docker compose up -d",
+    "deployment_user": "ubuntu",
+    "service": "govern-v3",
     "repository_branch": "main",
     "repository_freeze_anchor_commit": "7b29408",
     "backend_implementation_commit": "f02f7ff",
     "pipeline_version": "BACKEND_IMPLEMENTATION_f02f7ff",
-    "judge_model": "TO_BE_RECORDED",
-    "judge_model_version": "TO_BE_RECORDED",
-    "judge_endpoint_type": "TO_BE_RECORDED",
-    "judge_base_url": "TO_BE_RECORDED_WITHOUT_SECRET",
-    "judge_temperature": "TO_BE_RECORDED",
-    "judge_response_format": "TO_BE_RECORDED",
-    "dependencies_file": "TO_BE_DEFINED",
+
+    "judge_provider": "Infomaniak Euria",
+    "judge_configuration_variable": "HALLUCINATION_JUDGE_BASE_URL",
+    "judge_model_configuration_variable": "HALLUCINATION_MODEL",
+    "judge_model": "mistral24b",
+    "judge_model_version": "mistral24b",
+    "judge_endpoint_type": "OPENAI_COMPATIBLE_CHAT_COMPLETIONS",
+    "judge_base_url": "https://api.infomaniak.com/2/ai/108205/openai/v1/chat/completions",
+    "judge_temperature": 0.1,
+    "judge_temperature_configurable_by_environment": false,
+    "judge_temperature_configuration": "HARDCODED_FOR_SCORING_STABILITY",
+    "judge_response_format": "FREE_FORM_JSON_INSTRUCTED_BY_SYSTEM_PROMPT",
+    "judge_response_format_json_object_parameter": false,
+    "judge_response_parsing": [
+      "DIRECT_JSON",
+      "JSON_CODE_BLOCK",
+      "LARGEST_BRACED_JSON_BLOCK_EXTRACTION"
+    ],
+
+    "fallback_model_configuration_variable": "HALLUCINATION_JUDGE_FALLBACK_MODEL",
+    "fallback_model": "llama3.1:8b",
+    "fallback_activation": "AUTOMATIC",
+    "fallback_mechanism": "CIRCUIT_BREAKER",
+    "fallback_cooldown_seconds": 30,
+
+    "dependencies_file": "requirements.txt",
+    "dependency_management": "pip",
+    "environment_information_source": "Manal",
+    "environment_confirmation_date": "2026-08-08",
     "secrets_recorded_in_manifest": false,
-    "environment_recorded": false
+    "environment_recorded": true
   },
 
   "authorization": {
@@ -207,7 +239,7 @@
     "corpus_frozen": true,
     "frozen_validation_passed": true,
     "repository_freeze_anchor_recorded": true,
-    "environment_recorded": false,
+    "environment_recorded": true,
     "execution_authorized": false,
     "authorized_by": "Sebastien",
     "authorization_date": null
@@ -231,17 +263,12 @@
     "corpus_frozen": true,
     "frozen_validation_passed": true,
     "repository_freeze_anchor_recorded": true,
-    "execution_environment_recorded": false,
+    "execution_environment_recorded": true,
     "execution_authorized": false
   },
 
   "execution_blockers": [
-    "Le système d’exploitation utilisé pour l’exécution doit être enregistré.",
-    "Le modèle juge et sa version doivent être enregistrés.",
-    "Le type d’endpoint du modèle juge doit être enregistré.",
-    "Les paramètres non secrets nécessaires à la reproduction du run doivent être enregistrés.",
-    "Le fichier ou la méthode de gel des dépendances doit être défini.",
-    "L’autorisation explicite d’exécution doit être enregistrée."
+    "L’autorisation explicite d’exécution doit être enregistrée avant la première exécution."
   ],
 
   "limitations": [
@@ -251,12 +278,15 @@
     "Les résultats ne peuvent soutenir aucune affirmation générale de performance.",
     "Le seuil 0.5 est figé pour cette expérience mais n’est ni calibré ni validé.",
     "Le signal repose sur un modèle juge et peut produire des faux positifs et des faux négatifs.",
+    "Le juge primaire utilise le modèle mistral24b via l’endpoint OpenAI-compatible d’Infomaniak Euria.",
+    "Un mécanisme de fallback automatique vers llama3.1:8b existe en cas d’indisponibilité du juge primaire ; les activations du fallback doivent être enregistrées et analysées séparément.",
     "Le repository backend est privé et le commit f02f7ff constitue une ancre d’audit interne, pas une preuve publique autonome.",
     "Le repository expérimental est privé et le commit 7b29408 constitue une ancre d’audit interne.",
     "Une réussite du smoke test confirmerait uniquement le fonctionnement technique de la chaîne expérimentale."
   ],
 
   "next_step": {
-    "fr": "Documenter précisément l’environnement d’exécution et les dépendances avant toute autorisation du run."
+    "fr": "Vérifier les conditions préalables puis enregistrer explicitement l’autorisation d’exécution avant la préparation et le lancement du smoke test."
   }
 }
+```
