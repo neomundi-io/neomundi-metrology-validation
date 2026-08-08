@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 EXP-001 — NeoMundi smoke-test runner
-Version: v0.1
+Runner version: v0.1.1
 
 Purpose
 -------
@@ -20,7 +20,9 @@ This runner:
 - derives the frozen experimental classification using threshold 0.5;
 - records API errors explicitly;
 - preserves the raw NeoMundi response for auditability;
-- never stores the NeoMundi API key in the repository.
+- uses an explicit HTTP User-Agent for API compatibility;
+- never stores the NeoMundi API key in the repository;
+- returns a non-zero process exit code if any computation error occurs.
 
 This script does NOT:
 - modify the frozen corpus;
@@ -51,6 +53,7 @@ from urllib.request import Request, urlopen
 
 EXPERIMENT_ID = "EXP-001"
 EXPERIMENT_VERSION = "v0.1"
+RUNNER_VERSION = "v0.1.1"
 RUN_ID = "EXP001-SMOKE-RUN-001"
 
 EXPECTED_CASE_COUNT = 20
@@ -71,6 +74,11 @@ DEFAULT_NEOMUNDI_BASE_URL = "https://api.neomundi.io"
 GOVERN_PATH = "/v1/govern"
 
 HTTP_TIMEOUT_SECONDS = 180
+
+HTTP_USER_AGENT = (
+    "NeoMundi-Metrology-Validation/"
+    "EXP-001-v0.1.1"
+)
 
 
 # =============================================================================
@@ -113,7 +121,10 @@ ERROR_LOG_PATH = (
 OUTPUT_FIELDS = [
     "experiment_id",
     "experiment_version",
+    "runner_version",
     "run_id",
+    "github_run_id",
+    "github_run_attempt",
     "case_id",
     "target_event_id",
 
@@ -160,7 +171,10 @@ OUTPUT_FIELDS = [
 ERROR_FIELDS = [
     "experiment_id",
     "experiment_version",
+    "runner_version",
     "run_id",
+    "github_run_id",
+    "github_run_attempt",
     "case_id",
     "timestamp_utc",
     "error_type",
@@ -176,6 +190,14 @@ ERROR_FIELDS = [
 def utc_now_iso() -> str:
     """Return a UTC ISO-8601 timestamp."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def github_run_id() -> str:
+    return os.environ.get("GITHUB_RUN_ID", "").strip()
+
+
+def github_run_attempt() -> str:
+    return os.environ.get("GITHUB_RUN_ATTEMPT", "").strip()
 
 
 def sha256_file(path: Path) -> str:
@@ -194,12 +216,7 @@ def nested_get(
     path: str,
     default: Any = None,
 ) -> Any:
-    """
-    Read a nested dictionary value using dot notation.
-
-    Example:
-        nested_get(data, "quality.factual_hallucination_score")
-    """
+    """Read a nested dictionary value using dot notation."""
     current = obj
 
     for part in path.split("."):
@@ -243,12 +260,24 @@ def load_manifest() -> dict[str, Any]:
 def verify_manifest_authorization(
     manifest: dict[str, Any],
 ) -> None:
-    """
-    Refuse execution unless the manifest explicitly authorizes the run.
-    """
+    """Refuse execution unless the manifest explicitly authorizes the run."""
+
     if manifest.get("experiment_id") != EXPERIMENT_ID:
         raise RuntimeError(
             "Le manifest ne correspond pas à EXP-001."
+        )
+
+    if manifest.get("experiment_version") != EXPERIMENT_VERSION:
+        raise RuntimeError(
+            "La version du manifest ne correspond pas à EXP-001 v0.1."
+        )
+
+    manifest_run_id = manifest.get("run_id")
+
+    if manifest_run_id != RUN_ID:
+        raise RuntimeError(
+            f"run_id du manifest = {manifest_run_id!r}, "
+            f"attendu = {RUN_ID!r}."
         )
 
     authorization = manifest.get("authorization", {})
@@ -291,10 +320,8 @@ def verify_manifest_authorization(
 def verify_frozen_constants(
     manifest: dict[str, Any],
 ) -> None:
-    """
-    Verify that critical frozen experimental parameters in the manifest
-    still match the runner.
-    """
+    """Verify critical frozen experimental parameters."""
+
     metric = manifest.get("metric", {})
     corpus = manifest.get("corpus", {})
 
@@ -328,9 +355,8 @@ def verify_frozen_constants(
 
 
 def verify_corpus_hash() -> str:
-    """
-    Verify the frozen corpus SHA-256 before any API request.
-    """
+    """Verify the frozen corpus SHA-256 before any API request."""
+
     if not CORPUS_PATH.exists():
         raise RuntimeError(
             f"Corpus introuvable : {CORPUS_PATH}"
@@ -351,6 +377,7 @@ def verify_corpus_hash() -> str:
 
 def load_corpus() -> list[dict[str, str]]:
     """Load and minimally validate the frozen CSV corpus."""
+
     with CORPUS_PATH.open(
         "r",
         encoding="utf-8-sig",
@@ -358,6 +385,7 @@ def load_corpus() -> list[dict[str, str]]:
     ) as handle:
         reader = csv.DictReader(handle)
         rows = list(reader)
+        fieldnames = reader.fieldnames or []
 
     required_columns = {
         "case_id",
@@ -370,7 +398,7 @@ def load_corpus() -> list[dict[str, str]]:
         "exclusion_status",
     }
 
-    actual_columns = set(reader.fieldnames or [])
+    actual_columns = set(fieldnames)
 
     missing_columns = required_columns - actual_columns
 
@@ -420,11 +448,8 @@ def load_corpus() -> list[dict[str, str]]:
 
 
 def get_api_configuration() -> tuple[str, str]:
-    """
-    Read API configuration from environment variables.
+    """Read NeoMundi API configuration from environment variables."""
 
-    The key must never be hard-coded in this repository.
-    """
     api_key = os.environ.get(
         "NEOMUNDI_API_KEY",
         "",
@@ -462,10 +487,9 @@ def call_neomundi(
     response_text: str,
 ) -> tuple[int, dict[str, Any], float]:
     """
-    Call the NeoMundi V3 measurement endpoint.
+    Call the NeoMundi /v1/govern endpoint.
 
-    IMPORTANT:
-    Only prompt and response_text from the experimental case are sent.
+    Only prompt and response are sent from the experimental corpus.
     Ground-truth labels and reference information are never included.
     """
 
@@ -494,8 +518,10 @@ def call_neomundi(
         method="POST",
         headers={
             "X-API-Key": api_key,
-            "Content-Type": "application/json; charset=utf-8",
+            "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": HTTP_USER_AGENT,
+            "X-NeoMundi-Client": "EXP-001-Metrology-Validation",
         },
     )
 
@@ -564,6 +590,7 @@ def call_neomundi(
 
 def normalize_score(value: Any) -> float | None:
     """Safely normalize factual_hallucination_score."""
+
     if value is None:
         return None
 
@@ -584,11 +611,8 @@ def normalize_score(value: Any) -> float | None:
 def classify_signal(
     score: float | None,
 ) -> tuple[bool | None, str]:
-    """
-    Apply the frozen EXP-001 threshold.
+    """Apply the frozen EXP-001 threshold."""
 
-    A missing/unusable score is SIGNAL_UNAVAILABLE.
-    """
     if score is None:
         return None, "SIGNAL_UNAVAILABLE"
 
@@ -606,13 +630,8 @@ def detect_fallback_information(
     """
     Record fallback information conservatively.
 
-    The currently documented /v1/govern contract used by the weekly
-    PowerShell runner does not establish a stable public fallback field.
-
-    We therefore do NOT invent one.
-
-    If no explicit fallback information is exposed, this runner records
-    UNKNOWN_NOT_EXPOSED instead of silently assuming that no fallback occurred.
+    If no explicit fallback field is exposed by the API, the runner records
+    UNKNOWN_NOT_EXPOSED instead of assuming that no fallback occurred.
     """
 
     explicit_candidates = [
@@ -639,12 +658,8 @@ def detect_fallback_information(
 def extract_judge_model_exposed(
     response: dict[str, Any],
 ) -> str:
-    """
-    Conservatively look for an explicitly exposed judge model.
+    """Look only for an explicitly exposed judge-model field."""
 
-    If the API does not expose one, leave the field empty.
-    We do not substitute the source LLM model.
-    """
     candidates = [
         nested_get(response, "judge_model"),
         nested_get(response, "quality.judge_model"),
@@ -655,6 +670,7 @@ def extract_judge_model_exposed(
     for candidate in candidates:
         if candidate is not None:
             text = str(candidate).strip()
+
             if text:
                 return text
 
@@ -667,10 +683,9 @@ def extract_judge_model_exposed(
 
 def prepare_output_files() -> None:
     """
-    Refuse to overwrite previous experiment results.
-
-    Existing non-empty outputs require a new explicit run/version.
+    Refuse to overwrite existing non-empty outputs in the current workspace.
     """
+
     RESULTS_DIR.mkdir(
         parents=True,
         exist_ok=True,
@@ -695,6 +710,7 @@ def write_output_header() -> None:
             handle,
             fieldnames=OUTPUT_FIELDS,
         )
+
         writer.writeheader()
 
 
@@ -708,6 +724,7 @@ def write_error_header() -> None:
             handle,
             fieldnames=ERROR_FIELDS,
         )
+
         writer.writeheader()
 
 
@@ -722,6 +739,7 @@ def append_output(row: dict[str, Any]) -> None:
             fieldnames=OUTPUT_FIELDS,
             extrasaction="ignore",
         )
+
         writer.writerow(row)
 
 
@@ -746,7 +764,10 @@ def append_error(
             {
                 "experiment_id": EXPERIMENT_ID,
                 "experiment_version": EXPERIMENT_VERSION,
+                "runner_version": RUNNER_VERSION,
                 "run_id": RUN_ID,
+                "github_run_id": github_run_id(),
+                "github_run_attempt": github_run_attempt(),
                 "case_id": case_id,
                 "timestamp_utc": utc_now_iso(),
                 "error_type": error_type,
@@ -757,7 +778,7 @@ def append_error(
 
 
 # =============================================================================
-# EXECUTION
+# RESULT BUILDERS
 # =============================================================================
 
 def build_result_row(
@@ -800,7 +821,10 @@ def build_result_row(
     return {
         "experiment_id": EXPERIMENT_ID,
         "experiment_version": EXPERIMENT_VERSION,
+        "runner_version": RUNNER_VERSION,
         "run_id": RUN_ID,
+        "github_run_id": github_run_id(),
+        "github_run_attempt": github_run_attempt(),
         "case_id": case_id,
         "target_event_id": target_event_id,
 
@@ -814,21 +838,25 @@ def build_result_row(
         "request_completed_at_utc": request_completed_at,
 
         "http_status": http_status,
+
         "request_id": nested_get(
             api_response,
             "request_id",
             "",
         ),
+
         "api_timestamp": nested_get(
             api_response,
             "timestamp",
             "",
         ),
+
         "system_id": nested_get(
             api_response,
             "system_id",
             "",
         ),
+
         "mode": nested_get(
             api_response,
             "mode",
@@ -840,17 +868,20 @@ def build_result_row(
             if score is None
             else score
         ),
+
         "is_hallucinated": (
             ""
             if is_hallucinated is None
             else str(is_hallucinated).lower()
         ),
+
         "experimental_signal_class": experimental_class,
 
         "judge_model_configured": judge_model_configured,
         "judge_model_exposed_by_api": judge_model_exposed,
 
         "fallback_status": fallback_status,
+
         "fallback_information_exposed_by_api": (
             str(fallback_exposed).lower()
         ),
@@ -859,6 +890,7 @@ def build_result_row(
             api_latency_ms,
             3,
         ),
+
         "processing_time_ms": nested_get(
             api_response,
             "processing_time_ms",
@@ -874,11 +906,13 @@ def build_result_row(
             "audit.measurement_version",
             "",
         ),
+
         "normalizer_version": nested_get(
             api_response,
             "audit.normalizer_version",
             "",
         ),
+
         "trace_id": nested_get(
             api_response,
             "audit.trace_id",
@@ -905,7 +939,10 @@ def build_error_output_row(
     return {
         "experiment_id": EXPERIMENT_ID,
         "experiment_version": EXPERIMENT_VERSION,
+        "runner_version": RUNNER_VERSION,
         "run_id": RUN_ID,
+        "github_run_id": github_run_id(),
+        "github_run_attempt": github_run_attempt(),
         "case_id": case_id,
         "target_event_id": target_event_id,
 
@@ -949,15 +986,21 @@ def build_error_output_row(
     }
 
 
+# =============================================================================
+# EXECUTION
+# =============================================================================
+
 def main() -> int:
     print("=" * 72)
     print("NeoMundi Metrology Validation")
-    print("EXP-001 — Smoke Test Runner v0.1")
+    print(
+        f"EXP-001 — Smoke Test Runner {RUNNER_VERSION}"
+    )
     print("=" * 72)
     print()
 
     # -------------------------------------------------------------------------
-    # 1. Load manifest
+    # 1. Manifest
     # -------------------------------------------------------------------------
 
     print("[1/7] Lecture du manifeste...")
@@ -965,13 +1008,12 @@ def main() -> int:
     manifest = load_manifest()
 
     verify_manifest_authorization(manifest)
-
     verify_frozen_constants(manifest)
 
     print("      OK — exécution explicitement autorisée.")
 
     # -------------------------------------------------------------------------
-    # 2. Verify frozen corpus hash
+    # 2. Frozen corpus hash
     # -------------------------------------------------------------------------
 
     print("[2/7] Vérification du SHA-256 du corpus...")
@@ -981,7 +1023,7 @@ def main() -> int:
     print(f"      OK — {actual_hash}")
 
     # -------------------------------------------------------------------------
-    # 3. Load corpus
+    # 3. Corpus
     # -------------------------------------------------------------------------
 
     print("[3/7] Chargement du corpus gelé...")
@@ -991,7 +1033,7 @@ def main() -> int:
     print(f"      OK — {len(rows)} cas chargés.")
 
     # -------------------------------------------------------------------------
-    # 4. Read API configuration
+    # 4. API configuration
     # -------------------------------------------------------------------------
 
     print("[4/7] Vérification de la configuration API...")
@@ -1002,9 +1044,10 @@ def main() -> int:
 
     print(f"      Endpoint : {endpoint}")
     print("      API key  : présente (valeur masquée)")
+    print(f"      User-Agent : {HTTP_USER_AGENT}")
 
     # -------------------------------------------------------------------------
-    # 5. Read judge configuration from manifest
+    # 5. Judge configuration
     # -------------------------------------------------------------------------
 
     environment = manifest.get(
@@ -1025,7 +1068,7 @@ def main() -> int:
     )
 
     # -------------------------------------------------------------------------
-    # 6. Prepare outputs
+    # 6. Output preparation
     # -------------------------------------------------------------------------
 
     print("[5/7] Préparation des fichiers de sortie...")
@@ -1039,7 +1082,7 @@ def main() -> int:
     print(f"      {ERROR_LOG_PATH}")
 
     # -------------------------------------------------------------------------
-    # 7. Execute all 20 cases
+    # 7. Execute cases
     # -------------------------------------------------------------------------
 
     print("[6/7] Exécution des 20 cas...")
@@ -1104,6 +1147,7 @@ def main() -> int:
 
             if signal_class == "SIGNAL_UNAVAILABLE":
                 unavailable_count += 1
+
             else:
                 success_count += 1
 
@@ -1147,33 +1191,57 @@ def main() -> int:
                 f"{error_type}: {error_message}"
             )
 
+    # -------------------------------------------------------------------------
+    # Technical summary
+    # -------------------------------------------------------------------------
+
     print()
-
-    # -------------------------------------------------------------------------
-    # Final technical summary
-    # -------------------------------------------------------------------------
-
     print("[7/7] Résumé technique")
     print()
+
     print(f"      Cas prévus               : {len(rows)}")
     print(f"      Signaux calculés          : {success_count}")
     print(f"      Signaux indisponibles     : {unavailable_count}")
     print(f"      Erreurs de calcul         : {error_count}")
+
     print()
     print(f"      Sorties NeoMundi : {OUTPUT_PATH}")
     print(f"      Journal erreurs  : {ERROR_LOG_PATH}")
     print()
 
-    if success_count + unavailable_count + error_count != len(rows):
+    total = (
+        success_count
+        + unavailable_count
+        + error_count
+    )
+
+    if total != len(rows):
         print(
-            "ERREUR INTERNE : le nombre de résultats ne correspond "
-            "pas au nombre de cas."
+            "FATAL — le nombre de résultats ne correspond "
+            "pas au nombre de cas.",
+            file=sys.stderr,
         )
         return 2
 
+    if error_count > 0:
+        print(
+            "RUN FAILED — au moins une erreur de calcul "
+            "a été enregistrée.",
+            file=sys.stderr,
+        )
+        return 3
+
+    if unavailable_count > 0:
+        print(
+            "RUN COMPLETED WITH UNAVAILABLE SIGNALS — "
+            "une revue technique est requise."
+        )
+        return 0
+
     print(
-        "RUN TERMINÉ — aucune interprétation de performance "
-        "n'est produite par ce script."
+        "RUN COMPLETED — les 20 cas ont produit un signal. "
+        "Aucune interprétation de performance n'est produite "
+        "par ce script."
     )
 
     return 0
