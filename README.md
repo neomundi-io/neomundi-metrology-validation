@@ -1,4 +1,4 @@
-[Français](README.FR.md) | **English**
+🇬🇧 **English version:** [README.md](./README.md) · 🇫🇷 **Version française :** [README_FR.md](./README_FR.md)
 
 ## Current status
 
