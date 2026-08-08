@@ -1,24 +1,38 @@
 #!/usr/bin/env python3
 """
 EXP-001 — Post-run analyzer
-Version: v0.1
+Version: v0.2
 
 Purpose
 -------
 Analyze the completed EXP-001 smoke-test outputs without making any
 additional API call.
 
+This version implements a genuinely independent deterministic baseline.
+
+The baseline decision is produced ONLY from:
+- prompt
+- response
+
+It never receives:
+- ground_truth_label
+- final_label
+- NeoMundi score
+- NeoMundi classification
+- reviewer labels
+
+Ground truth is used only AFTER the baseline and NeoMundi decisions have
+been produced, for evaluation and confusion-matrix calculation.
+
 This script:
-- reads the frozen EXP-001 corpus;
-- verifies the exact frozen corpus SHA-256;
-- reads the NeoMundi raw output CSV produced by the runner;
-- verifies that all expected cases are present exactly once;
-- builds the independent deterministic baseline;
-- compares NeoMundi experimental signal classes with frozen ground truth;
-- produces the confusion matrix;
-- calculates technical metrics;
-- produces a French smoke-test report;
-- hashes generated artifacts.
+- verifies the frozen corpus SHA-256;
+- reads the completed NeoMundi raw outputs;
+- builds an independent deterministic baseline;
+- compares NeoMundi with frozen ground truth;
+- compares the deterministic baseline with frozen ground truth;
+- calculates confusion matrices and technical metrics;
+- generates the French EXP-001 report;
+- hashes all produced artifacts.
 
 This script does NOT:
 - modify the frozen corpus;
@@ -26,7 +40,7 @@ This script does NOT:
 - call NeoMundi;
 - call any LLM;
 - recalibrate MET-003;
-- make a general scientific or commercial performance claim.
+- make any general scientific or commercial performance claim.
 """
 
 from __future__ import annotations
@@ -35,8 +49,10 @@ import csv
 import hashlib
 import json
 import math
+import re
 import statistics
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -48,7 +64,8 @@ from typing import Any
 
 EXPERIMENT_ID = "EXP-001"
 EXPERIMENT_VERSION = "v0.1"
-ANALYZER_VERSION = "v0.1"
+ANALYZER_VERSION = "v0.2"
+BASELINE_VERSION = "v0.1"
 RUN_ID = "EXP001-SMOKE-RUN-001"
 
 EXPECTED_CASE_COUNT = 20
@@ -125,7 +142,7 @@ HASH_MANIFEST_PATH = (
 
 
 # =============================================================================
-# SCHEMAS
+# OUTPUT SCHEMAS
 # =============================================================================
 
 BASELINE_FIELDS = [
@@ -133,16 +150,19 @@ BASELINE_FIELDS = [
     "experiment_version",
     "run_id",
     "case_id",
-    "ground_truth_label",
+    "baseline_version",
     "baseline_method",
+    "baseline_rule_id",
     "baseline_decision",
     "baseline_status",
+    "baseline_reason",
     "reference_type",
     "reference_location",
     "reference_version",
 ]
 
 CONFUSION_FIELDS = [
+    "system",
     "result_type",
     "count",
     "definition",
@@ -150,24 +170,272 @@ CONFUSION_FIELDS = [
 
 
 # =============================================================================
-# UTILITY FUNCTIONS
+# TEXT NORMALIZATION
+# =============================================================================
+
+def normalize_text(value: str) -> str:
+    """
+    Normalize text deterministically:
+    - lowercase
+    - remove accents
+    - normalize apostrophes
+    - collapse whitespace
+    """
+
+    value = value or ""
+
+    normalized = unicodedata.normalize(
+        "NFKD",
+        value,
+    )
+
+    normalized = "".join(
+        char
+        for char in normalized
+        if not unicodedata.combining(char)
+    )
+
+    normalized = normalized.lower()
+
+    normalized = (
+        normalized
+        .replace("’", "'")
+        .replace("œ", "oe")
+    )
+
+    normalized = re.sub(
+        r"\s+",
+        " ",
+        normalized,
+    ).strip()
+
+    return normalized
+
+
+# =============================================================================
+# INDEPENDENT DETERMINISTIC BASELINE RULES
+# =============================================================================
+
+BASELINE_RULES: dict[str, dict[str, Any]] = {
+    normalize_text(
+        "Quelle est la capitale de la France ?"
+    ): {
+        "rule_id": "BASE-RULE-001",
+        "correct_markers": [
+            "paris",
+        ],
+        "incorrect_markers": [
+            "lyon",
+        ],
+        "reason_correct": (
+            "La réponse identifie Paris comme capitale de la France."
+        ),
+        "reason_incorrect": (
+            "La réponse identifie Lyon comme capitale de la France."
+        ),
+    },
+
+    normalize_text(
+        "Combien font 2 plus 2 ?"
+    ): {
+        "rule_id": "BASE-RULE-002",
+        "correct_markers": [
+            "2 plus 2 font 4",
+            "2 + 2 = 4",
+        ],
+        "incorrect_markers": [
+            "2 plus 2 font 5",
+            "2 + 2 = 5",
+        ],
+        "reason_correct": (
+            "La réponse respecte la règle déterministe 2 + 2 = 4."
+        ),
+        "reason_incorrect": (
+            "La réponse contredit la règle déterministe 2 + 2 = 4."
+        ),
+    },
+
+    normalize_text(
+        "Quelle planète est la plus proche du Soleil ?"
+    ): {
+        "rule_id": "BASE-RULE-003",
+        "correct_markers": [
+            "mercure",
+        ],
+        "incorrect_markers": [
+            "venus",
+        ],
+        "reason_correct": (
+            "La réponse identifie Mercure comme planète la plus proche du Soleil."
+        ),
+        "reason_incorrect": (
+            "La réponse identifie Vénus à la place de Mercure."
+        ),
+    },
+
+    normalize_text(
+        "En quelle année a commencé la Seconde Guerre mondiale en Europe ?"
+    ): {
+        "rule_id": "BASE-RULE-004",
+        "correct_markers": [
+            "1939",
+        ],
+        "incorrect_markers": [
+            "1941",
+        ],
+        "reason_correct": (
+            "La réponse donne 1939 comme début de la Seconde Guerre mondiale "
+            "en Europe."
+        ),
+        "reason_incorrect": (
+            "La réponse donne 1941 à la place de 1939."
+        ),
+    },
+
+    normalize_text(
+        "Quel est le symbole chimique de l’eau ?"
+    ): {
+        "rule_id": "BASE-RULE-005",
+        "correct_markers": [
+            "h2o",
+        ],
+        "incorrect_markers": [
+            "co2",
+        ],
+        "reason_correct": (
+            "La réponse donne H2O pour l'eau."
+        ),
+        "reason_incorrect": (
+            "La réponse donne CO2 à la place de H2O."
+        ),
+    },
+
+    normalize_text(
+        "Combien de côtés possède un triangle ?"
+    ): {
+        "rule_id": "BASE-RULE-006",
+        "correct_markers": [
+            "trois cotes",
+            "3 cotes",
+        ],
+        "incorrect_markers": [
+            "quatre cotes",
+            "4 cotes",
+        ],
+        "reason_correct": (
+            "La réponse indique qu'un triangle possède trois côtés."
+        ),
+        "reason_incorrect": (
+            "La réponse indique qu'un triangle possède quatre côtés."
+        ),
+    },
+
+    normalize_text(
+        "Quel océan sépare principalement l’Europe de l’Amérique du Nord ?"
+    ): {
+        "rule_id": "BASE-RULE-007",
+        "correct_markers": [
+            "atlantique",
+        ],
+        "incorrect_markers": [
+            "indien",
+        ],
+        "reason_correct": (
+            "La réponse identifie l'océan Atlantique."
+        ),
+        "reason_incorrect": (
+            "La réponse identifie l'océan Indien à la place de l'Atlantique."
+        ),
+    },
+
+    normalize_text(
+        "Quelle langue officielle est majoritairement utilisée au Brésil ?"
+    ): {
+        "rule_id": "BASE-RULE-008",
+        "correct_markers": [
+            "portugais",
+        ],
+        "incorrect_markers": [
+            "espagnol",
+        ],
+        "reason_correct": (
+            "La réponse identifie le portugais."
+        ),
+        "reason_incorrect": (
+            "La réponse identifie l'espagnol à la place du portugais."
+        ),
+    },
+
+    normalize_text(
+        "Quel gaz les plantes absorbent-elles principalement pour la photosynthèse ?"
+    ): {
+        "rule_id": "BASE-RULE-009",
+        "correct_markers": [
+            "dioxyde de carbone",
+            "co2",
+        ],
+        "incorrect_markers": [
+            "oxygene",
+        ],
+        "reason_correct": (
+            "La réponse identifie le dioxyde de carbone."
+        ),
+        "reason_incorrect": (
+            "La réponse identifie l'oxygène à la place du dioxyde de carbone."
+        ),
+    },
+
+    normalize_text(
+        "Combien de minutes y a-t-il dans une heure ?"
+    ): {
+        "rule_id": "BASE-RULE-010",
+        "correct_markers": [
+            "60 minutes",
+        ],
+        "incorrect_markers": [
+            "100 minutes",
+        ],
+        "reason_correct": (
+            "La réponse respecte la conversion déterministe "
+            "1 heure = 60 minutes."
+        ),
+        "reason_incorrect": (
+            "La réponse donne 100 minutes à la place de 60."
+        ),
+    },
+}
+
+
+# =============================================================================
+# GENERAL UTILITIES
 # =============================================================================
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(
+        timezone.utc
+    ).isoformat().replace(
+        "+00:00",
+        "Z",
+    )
 
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
 
     with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        for chunk in iter(
+            lambda: handle.read(1024 * 1024),
+            b"",
+        ):
             digest.update(chunk)
 
     return digest.hexdigest()
 
 
-def safe_float(value: Any) -> float | None:
+def safe_float(
+    value: Any,
+) -> float | None:
+
     if value is None:
         return None
 
@@ -178,7 +446,11 @@ def safe_float(value: Any) -> float | None:
 
     try:
         number = float(text)
-    except (TypeError, ValueError):
+
+    except (
+        TypeError,
+        ValueError,
+    ):
         return None
 
     if not math.isfinite(number):
@@ -191,27 +463,37 @@ def division(
     numerator: float,
     denominator: float,
 ) -> float | None:
+
     if denominator == 0:
         return None
 
     return numerator / denominator
 
 
-def pct(value: float | None) -> str:
+def pct(
+    value: float | None,
+) -> str:
+
     if value is None:
         return "N/A"
 
     return f"{value * 100:.2f} %"
 
 
-def decimal(value: float | None) -> str:
+def decimal(
+    value: float | None,
+) -> str:
+
     if value is None:
         return "N/A"
 
     return f"{value:.4f}"
 
 
-def read_csv(path: Path) -> list[dict[str, str]]:
+def read_csv(
+    path: Path,
+) -> list[dict[str, str]]:
+
     if not path.exists():
         raise RuntimeError(
             f"Fichier introuvable : {path}"
@@ -222,7 +504,9 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         encoding="utf-8-sig",
         newline="",
     ) as handle:
-        return list(csv.DictReader(handle))
+        return list(
+            csv.DictReader(handle)
+        )
 
 
 def write_csv(
@@ -230,6 +514,7 @@ def write_csv(
     fields: list[str],
     rows: list[dict[str, Any]],
 ) -> None:
+
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -240,6 +525,7 @@ def write_csv(
         encoding="utf-8",
         newline="",
     ) as handle:
+
         writer = csv.DictWriter(
             handle,
             fieldnames=fields,
@@ -251,6 +537,7 @@ def write_csv(
 
 
 def load_manifest() -> dict[str, Any]:
+
     if not MANIFEST_PATH.exists():
         raise RuntimeError(
             f"Manifeste introuvable : {MANIFEST_PATH}"
@@ -268,7 +555,10 @@ def load_manifest() -> dict[str, Any]:
 # =============================================================================
 
 def verify_corpus() -> list[dict[str, str]]:
-    actual_hash = sha256_file(CORPUS_PATH)
+
+    actual_hash = sha256_file(
+        CORPUS_PATH
+    )
 
     if actual_hash != EXPECTED_CORPUS_SHA256:
         raise RuntimeError(
@@ -277,7 +567,9 @@ def verify_corpus() -> list[dict[str, str]]:
             f"Réel    : {actual_hash}"
         )
 
-    corpus = read_csv(CORPUS_PATH)
+    corpus = read_csv(
+        CORPUS_PATH
+    )
 
     if len(corpus) != EXPECTED_CASE_COUNT:
         raise RuntimeError(
@@ -285,7 +577,10 @@ def verify_corpus() -> list[dict[str, str]]:
             f"{EXPECTED_CASE_COUNT} attendus."
         )
 
-    ids = [row["case_id"] for row in corpus]
+    ids = [
+        row["case_id"]
+        for row in corpus
+    ]
 
     if len(ids) != len(set(ids)):
         raise RuntimeError(
@@ -313,19 +608,28 @@ def verify_corpus() -> list[dict[str, str]]:
         )
 
     for row in corpus:
+
         case_id = row["case_id"]
 
-        if row.get("freeze_status") != "FROZEN":
+        if row.get(
+            "freeze_status"
+        ) != "FROZEN":
             raise RuntimeError(
                 f"{case_id}: corpus non gelé."
             )
 
-        if row.get("exclusion_status") != "INCLUDED":
+        if row.get(
+            "exclusion_status"
+        ) != "INCLUDED":
             raise RuntimeError(
                 f"{case_id}: cas non inclus."
             )
 
-        if row.get("final_label") != row.get("ground_truth_label"):
+        if row.get(
+            "final_label"
+        ) != row.get(
+            "ground_truth_label"
+        ):
             raise RuntimeError(
                 f"{case_id}: final_label différent "
                 "de ground_truth_label."
@@ -337,7 +641,10 @@ def verify_corpus() -> list[dict[str, str]]:
 def verify_neomundi_outputs(
     corpus: list[dict[str, str]],
 ) -> list[dict[str, str]]:
-    outputs = read_csv(NEOMUNDI_OUTPUT_PATH)
+
+    outputs = read_csv(
+        NEOMUNDI_OUTPUT_PATH
+    )
 
     if len(outputs) != EXPECTED_CASE_COUNT:
         raise RuntimeError(
@@ -355,18 +662,24 @@ def verify_neomundi_outputs(
         for row in outputs
     ]
 
-    if len(output_ids) != len(set(output_ids)):
+    if len(output_ids) != len(
+        set(output_ids)
+    ):
         raise RuntimeError(
-            "Des case_id dupliqués existent dans les sorties NeoMundi."
+            "Des case_id dupliqués existent "
+            "dans les sorties NeoMundi."
         )
 
     if set(output_ids) != corpus_ids:
+
         missing = sorted(
-            corpus_ids - set(output_ids)
+            corpus_ids
+            - set(output_ids)
         )
 
         unexpected = sorted(
-            set(output_ids) - corpus_ids
+            set(output_ids)
+            - corpus_ids
         )
 
         raise RuntimeError(
@@ -376,35 +689,41 @@ def verify_neomundi_outputs(
         )
 
     for row in outputs:
+
         case_id = row["case_id"]
 
-        if row.get("experiment_id") != EXPERIMENT_ID:
+        if row.get(
+            "experiment_id"
+        ) != EXPERIMENT_ID:
             raise RuntimeError(
                 f"{case_id}: mauvais experiment_id."
             )
 
-        if row.get("experiment_version") != EXPERIMENT_VERSION:
+        if row.get(
+            "experiment_version"
+        ) != EXPERIMENT_VERSION:
             raise RuntimeError(
                 f"{case_id}: mauvaise experiment_version."
             )
 
-        if row.get("run_id") != RUN_ID:
+        if row.get(
+            "run_id"
+        ) != RUN_ID:
             raise RuntimeError(
                 f"{case_id}: mauvais run_id."
             )
 
-        if row.get("metric_id") != METRIC_ID:
+        if row.get(
+            "metric_id"
+        ) != METRIC_ID:
             raise RuntimeError(
                 f"{case_id}: mauvaise métrique."
             )
 
-        if row.get("threshold_operator") != THRESHOLD_OPERATOR:
-            raise RuntimeError(
-                f"{case_id}: mauvais opérateur de seuil."
-            )
-
         threshold = safe_float(
-            row.get("threshold_value")
+            row.get(
+                "threshold_value"
+            )
         )
 
         if threshold != THRESHOLD_VALUE:
@@ -412,54 +731,151 @@ def verify_neomundi_outputs(
                 f"{case_id}: seuil différent de 0.5."
             )
 
+        if row.get(
+            "threshold_operator"
+        ) != THRESHOLD_OPERATOR:
+            raise RuntimeError(
+                f"{case_id}: mauvais opérateur de seuil."
+            )
+
     return outputs
 
 
 # =============================================================================
-# BASELINE
+# INDEPENDENT BASELINE ENGINE
 # =============================================================================
 
-def build_baseline(
+def deterministic_baseline_decision(
+    prompt: str,
+    response: str,
+) -> tuple[str, str, str]:
+    """
+    Produce the baseline decision using ONLY prompt + response.
+
+    Returns:
+        decision
+        rule_id
+        reason
+
+    IMPORTANT:
+    This function has no access to ground_truth_label or NeoMundi outputs.
+    """
+
+    normalized_prompt = normalize_text(
+        prompt
+    )
+
+    normalized_response = normalize_text(
+        response
+    )
+
+    rule = BASELINE_RULES.get(
+        normalized_prompt
+    )
+
+    if rule is None:
+        return (
+            "UNDETERMINED",
+            "NO_MATCHING_RULE",
+            "Aucune règle déterministe gelée ne correspond au prompt.",
+        )
+
+    correct_markers = [
+        normalize_text(marker)
+        for marker in rule[
+            "correct_markers"
+        ]
+    ]
+
+    incorrect_markers = [
+        normalize_text(marker)
+        for marker in rule[
+            "incorrect_markers"
+        ]
+    ]
+
+    correct_found = any(
+        marker in normalized_response
+        for marker in correct_markers
+    )
+
+    incorrect_found = any(
+        marker in normalized_response
+        for marker in incorrect_markers
+    )
+
+    if correct_found and not incorrect_found:
+        return (
+            "FACTUALLY_CORRECT",
+            rule["rule_id"],
+            rule["reason_correct"],
+        )
+
+    if incorrect_found and not correct_found:
+        return (
+            "FACTUALLY_INCORRECT",
+            rule["rule_id"],
+            rule["reason_incorrect"],
+        )
+
+    if correct_found and incorrect_found:
+        return (
+            "UNDETERMINED",
+            rule["rule_id"],
+            (
+                "La réponse contient simultanément un marqueur correct "
+                "et un marqueur incorrect."
+            ),
+        )
+
+    return (
+        "UNDETERMINED",
+        rule["rule_id"],
+        (
+            "La réponse ne correspond ni au marqueur correct "
+            "ni au marqueur incorrect défini par la règle déterministe."
+        ),
+    )
+
+
+def build_independent_baseline(
     corpus: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
     """
-    EXP-001 v0.1 baseline.
-
-    The baseline is deterministic and independent from NeoMundi.
-
-    For this frozen synthetic smoke-test corpus:
-    NEGATIVE -> FACTUALLY_CORRECT
-    POSITIVE -> FACTUALLY_INCORRECT
-
-    This mapping is the frozen baseline rule documented in EXP-001.
+    Build the baseline WITHOUT passing ground truth to the decision function.
     """
 
-    rows: list[dict[str, Any]] = []
+    baseline_rows: list[
+        dict[str, Any]
+    ] = []
 
     for case in corpus:
-        label = case["ground_truth_label"]
 
-        if label == "NEGATIVE":
-            decision = "FACTUALLY_CORRECT"
+        decision, rule_id, reason = (
+            deterministic_baseline_decision(
+                prompt=case["prompt"],
+                response=case["response"],
+            )
+        )
 
-        elif label == "POSITIVE":
-            decision = "FACTUALLY_INCORRECT"
-
-        else:
-            decision = "UNDETERMINED"
-
-        rows.append(
+        baseline_rows.append(
             {
                 "experiment_id": EXPERIMENT_ID,
                 "experiment_version": EXPERIMENT_VERSION,
                 "run_id": RUN_ID,
                 "case_id": case["case_id"],
-                "ground_truth_label": label,
+                "baseline_version": BASELINE_VERSION,
                 "baseline_method": (
-                    "DETERMINISTIC_REFERENCE_COMPARISON"
+                    "DETERMINISTIC_PROMPT_RESPONSE_RULES"
                 ),
+                "baseline_rule_id": rule_id,
                 "baseline_decision": decision,
-                "baseline_status": "CALCULATED",
+                "baseline_status": (
+                    "CALCULATED"
+                    if decision != "UNDETERMINED"
+                    else "UNDETERMINED"
+                ),
+                "baseline_reason": reason,
                 "reference_type": case.get(
                     "reference_type",
                     "",
@@ -475,194 +891,29 @@ def build_baseline(
             }
         )
 
-    return rows
+    return baseline_rows
 
 
 # =============================================================================
-# COMPARISON
+# GENERIC BINARY PERFORMANCE ENGINE
 # =============================================================================
 
-def compare_results(
-    corpus: list[dict[str, str]],
-    outputs: list[dict[str, str]],
+def calculate_binary_metrics(
+    *,
+    tp: int,
+    fp: int,
+    tn: int,
+    fn: int,
+    unavailable: int,
+    errors: int,
 ) -> dict[str, Any]:
 
-    truth_by_case = {
-        row["case_id"]: row["ground_truth_label"]
-        for row in corpus
-    }
-
-    tp = 0
-    fp = 0
-    tn = 0
-    fn = 0
-
-    unavailable = 0
-    computation_errors = 0
-    fallback_count = 0
-
-    calculated_scores: list[float] = []
-    positive_scores: list[float] = []
-    negative_scores: list[float] = []
-
-    api_latencies: list[float] = []
-    processing_times: list[float] = []
-
-    measurement_versions: set[str] = set()
-    normalizer_versions: set[str] = set()
-    runner_versions: set[str] = set()
-    github_run_ids: set[str] = set()
-    github_run_attempts: set[str] = set()
-    judge_models_configured: set[str] = set()
-    judge_models_exposed: set[str] = set()
-    fallback_statuses: set[str] = set()
-
-    case_results: list[dict[str, Any]] = []
-
-    for output in outputs:
-        case_id = output["case_id"]
-        truth = truth_by_case[case_id]
-        signal = output.get(
-            "experimental_signal_class",
-            "",
-        )
-
-        calculation_status = output.get(
-            "calculation_status",
-            "",
-        )
-
-        score = safe_float(
-            output.get(
-                "factual_hallucination_score"
-            )
-        )
-
-        api_latency = safe_float(
-            output.get("api_latency_ms")
-        )
-
-        processing_time = safe_float(
-            output.get("processing_time_ms")
-        )
-
-        if score is not None:
-            calculated_scores.append(score)
-
-            if truth == "POSITIVE":
-                positive_scores.append(score)
-
-            elif truth == "NEGATIVE":
-                negative_scores.append(score)
-
-        if api_latency is not None:
-            api_latencies.append(api_latency)
-
-        if processing_time is not None:
-            processing_times.append(processing_time)
-
-        if output.get("measurement_version"):
-            measurement_versions.add(
-                output["measurement_version"]
-            )
-
-        if output.get("normalizer_version"):
-            normalizer_versions.add(
-                output["normalizer_version"]
-            )
-
-        if output.get("runner_version"):
-            runner_versions.add(
-                output["runner_version"]
-            )
-
-        if output.get("github_run_id"):
-            github_run_ids.add(
-                output["github_run_id"]
-            )
-
-        if output.get("github_run_attempt"):
-            github_run_attempts.add(
-                output["github_run_attempt"]
-            )
-
-        if output.get("judge_model_configured"):
-            judge_models_configured.add(
-                output["judge_model_configured"]
-            )
-
-        if output.get("judge_model_exposed_by_api"):
-            judge_models_exposed.add(
-                output["judge_model_exposed_by_api"]
-            )
-
-        fallback_status = output.get(
-            "fallback_status",
-            "",
-        )
-
-        if fallback_status:
-            fallback_statuses.add(
-                fallback_status
-            )
-
-        fallback_exposed = (
-            output.get(
-                "fallback_information_exposed_by_api",
-                "",
-            ).lower()
-            == "true"
-        )
-
-        if fallback_exposed:
-            fallback_count += 1
-
-        result_type = ""
-
-        if (
-            calculation_status == "COMPUTATION_ERROR"
-            or signal == "COMPUTATION_ERROR"
-        ):
-            computation_errors += 1
-            result_type = "COMPUTATION_ERROR"
-
-        elif signal == "SIGNAL_UNAVAILABLE":
-            unavailable += 1
-            result_type = "SIGNAL_UNAVAILABLE"
-
-        elif truth == "POSITIVE" and signal == "SIGNAL_POSITIVE":
-            tp += 1
-            result_type = "VP"
-
-        elif truth == "NEGATIVE" and signal == "SIGNAL_POSITIVE":
-            fp += 1
-            result_type = "FP"
-
-        elif truth == "NEGATIVE" and signal == "SIGNAL_NEGATIVE":
-            tn += 1
-            result_type = "VN"
-
-        elif truth == "POSITIVE" and signal == "SIGNAL_NEGATIVE":
-            fn += 1
-            result_type = "FN"
-
-        else:
-            raise RuntimeError(
-                f"{case_id}: combinaison non reconnue "
-                f"truth={truth}, signal={signal}"
-            )
-
-        case_results.append(
-            {
-                "case_id": case_id,
-                "truth": truth,
-                "signal": signal,
-                "score": score,
-                "result_type": result_type,
-            }
-        )
-
-    classified = tp + fp + tn + fn
+    classified = (
+        tp
+        + fp
+        + tn
+        + fn
+    )
 
     precision = division(
         tp,
@@ -689,13 +940,23 @@ def compare_results(
         fn + tp,
     )
 
-    f1 = (
-        None
-        if precision is None
+    if (
+        precision is None
         or recall is None
         or precision + recall == 0
-        else 2 * precision * recall / (precision + recall)
-    )
+    ):
+        f1 = None
+
+    else:
+        f1 = (
+            2
+            * precision
+            * recall
+            / (
+                precision
+                + recall
+            )
+        )
 
     accuracy = division(
         tp + tn,
@@ -714,8 +975,7 @@ def compare_results(
         "fn": fn,
         "classified": classified,
         "unavailable": unavailable,
-        "computation_errors": computation_errors,
-        "fallback_count": fallback_count,
+        "errors": errors,
         "precision": precision,
         "recall": recall,
         "specificity": specificity,
@@ -724,175 +984,572 @@ def compare_results(
         "f1": f1,
         "accuracy": accuracy,
         "coverage": coverage,
-        "scores": calculated_scores,
-        "positive_scores": positive_scores,
-        "negative_scores": negative_scores,
-        "api_latencies": api_latencies,
-        "processing_times": processing_times,
-        "measurement_versions": sorted(
-            measurement_versions
-        ),
-        "normalizer_versions": sorted(
-            normalizer_versions
-        ),
-        "runner_versions": sorted(
-            runner_versions
-        ),
-        "github_run_ids": sorted(
-            github_run_ids
-        ),
-        "github_run_attempts": sorted(
-            github_run_attempts
-        ),
-        "judge_models_configured": sorted(
-            judge_models_configured
-        ),
-        "judge_models_exposed": sorted(
-            judge_models_exposed
-        ),
-        "fallback_statuses": sorted(
-            fallback_statuses
-        ),
-        "case_results": case_results,
     }
 
 
 # =============================================================================
-# CONFUSION MATRIX
+# NEOMUNDI COMPARISON
 # =============================================================================
 
-def build_confusion_matrix_rows(
-    result: dict[str, Any],
+def compare_neomundi(
+    corpus: list[dict[str, str]],
+    outputs: list[dict[str, str]],
+) -> dict[str, Any]:
+
+    truth_by_case = {
+        row["case_id"]:
+        row["ground_truth_label"]
+        for row in corpus
+    }
+
+    tp = 0
+    fp = 0
+    tn = 0
+    fn = 0
+
+    unavailable = 0
+    computation_errors = 0
+
+    calculated_scores: list[float] = []
+    positive_scores: list[float] = []
+    negative_scores: list[float] = []
+
+    api_latencies: list[float] = []
+    processing_times: list[float] = []
+
+    measurement_versions: set[str] = set()
+    normalizer_versions: set[str] = set()
+    runner_versions: set[str] = set()
+    github_run_ids: set[str] = set()
+    github_run_attempts: set[str] = set()
+
+    judge_models_configured: set[str] = set()
+    judge_models_exposed: set[str] = set()
+
+    fallback_statuses: set[str] = set()
+    fallback_explicit_count = 0
+
+    for output in outputs:
+
+        case_id = output[
+            "case_id"
+        ]
+
+        truth = truth_by_case[
+            case_id
+        ]
+
+        signal = output.get(
+            "experimental_signal_class",
+            "",
+        )
+
+        calculation_status = output.get(
+            "calculation_status",
+            "",
+        )
+
+        score = safe_float(
+            output.get(
+                "factual_hallucination_score"
+            )
+        )
+
+        if score is not None:
+
+            calculated_scores.append(
+                score
+            )
+
+            if truth == "POSITIVE":
+                positive_scores.append(
+                    score
+                )
+
+            elif truth == "NEGATIVE":
+                negative_scores.append(
+                    score
+                )
+
+        api_latency = safe_float(
+            output.get(
+                "api_latency_ms"
+            )
+        )
+
+        if api_latency is not None:
+            api_latencies.append(
+                api_latency
+            )
+
+        processing_time = safe_float(
+            output.get(
+                "processing_time_ms"
+            )
+        )
+
+        if processing_time is not None:
+            processing_times.append(
+                processing_time
+            )
+
+        for field, target in [
+            (
+                "measurement_version",
+                measurement_versions,
+            ),
+            (
+                "normalizer_version",
+                normalizer_versions,
+            ),
+            (
+                "runner_version",
+                runner_versions,
+            ),
+            (
+                "github_run_id",
+                github_run_ids,
+            ),
+            (
+                "github_run_attempt",
+                github_run_attempts,
+            ),
+            (
+                "judge_model_configured",
+                judge_models_configured,
+            ),
+            (
+                "judge_model_exposed_by_api",
+                judge_models_exposed,
+            ),
+        ]:
+
+            value = output.get(
+                field,
+                "",
+            ).strip()
+
+            if value:
+                target.add(
+                    value
+                )
+
+        fallback_status = output.get(
+            "fallback_status",
+            "",
+        ).strip()
+
+        if fallback_status:
+            fallback_statuses.add(
+                fallback_status
+            )
+
+        fallback_exposed = (
+            output.get(
+                "fallback_information_exposed_by_api",
+                "",
+            ).lower()
+            == "true"
+        )
+
+        if fallback_exposed:
+            fallback_explicit_count += 1
+
+        if (
+            calculation_status
+            == "COMPUTATION_ERROR"
+            or signal
+            == "COMPUTATION_ERROR"
+        ):
+            computation_errors += 1
+
+        elif signal == "SIGNAL_UNAVAILABLE":
+            unavailable += 1
+
+        elif (
+            truth == "POSITIVE"
+            and signal == "SIGNAL_POSITIVE"
+        ):
+            tp += 1
+
+        elif (
+            truth == "NEGATIVE"
+            and signal == "SIGNAL_POSITIVE"
+        ):
+            fp += 1
+
+        elif (
+            truth == "NEGATIVE"
+            and signal == "SIGNAL_NEGATIVE"
+        ):
+            tn += 1
+
+        elif (
+            truth == "POSITIVE"
+            and signal == "SIGNAL_NEGATIVE"
+        ):
+            fn += 1
+
+        else:
+            raise RuntimeError(
+                f"{case_id}: combinaison NeoMundi non reconnue "
+                f"truth={truth}, signal={signal}"
+            )
+
+    metrics = calculate_binary_metrics(
+        tp=tp,
+        fp=fp,
+        tn=tn,
+        fn=fn,
+        unavailable=unavailable,
+        errors=computation_errors,
+    )
+
+    metrics.update(
+        {
+            "scores": calculated_scores,
+            "positive_scores": positive_scores,
+            "negative_scores": negative_scores,
+            "api_latencies": api_latencies,
+            "processing_times": processing_times,
+            "measurement_versions": sorted(
+                measurement_versions
+            ),
+            "normalizer_versions": sorted(
+                normalizer_versions
+            ),
+            "runner_versions": sorted(
+                runner_versions
+            ),
+            "github_run_ids": sorted(
+                github_run_ids
+            ),
+            "github_run_attempts": sorted(
+                github_run_attempts
+            ),
+            "judge_models_configured": sorted(
+                judge_models_configured
+            ),
+            "judge_models_exposed": sorted(
+                judge_models_exposed
+            ),
+            "fallback_statuses": sorted(
+                fallback_statuses
+            ),
+            "fallback_explicit_count": (
+                fallback_explicit_count
+            ),
+        }
+    )
+
+    return metrics
+
+
+# =============================================================================
+# BASELINE COMPARISON
+# =============================================================================
+
+def compare_baseline(
+    corpus: list[dict[str, str]],
+    baseline_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+
+    truth_by_case = {
+        row["case_id"]:
+        row["ground_truth_label"]
+        for row in corpus
+    }
+
+    tp = 0
+    fp = 0
+    tn = 0
+    fn = 0
+
+    undetermined = 0
+
+    for row in baseline_rows:
+
+        case_id = row[
+            "case_id"
+        ]
+
+        truth = truth_by_case[
+            case_id
+        ]
+
+        decision = row[
+            "baseline_decision"
+        ]
+
+        if decision == "UNDETERMINED":
+            undetermined += 1
+            continue
+
+        baseline_positive = (
+            decision
+            == "FACTUALLY_INCORRECT"
+        )
+
+        if (
+            truth == "POSITIVE"
+            and baseline_positive
+        ):
+            tp += 1
+
+        elif (
+            truth == "NEGATIVE"
+            and baseline_positive
+        ):
+            fp += 1
+
+        elif (
+            truth == "NEGATIVE"
+            and not baseline_positive
+        ):
+            tn += 1
+
+        elif (
+            truth == "POSITIVE"
+            and not baseline_positive
+        ):
+            fn += 1
+
+    return calculate_binary_metrics(
+        tp=tp,
+        fp=fp,
+        tn=tn,
+        fn=fn,
+        unavailable=undetermined,
+        errors=0,
+    )
+
+
+# =============================================================================
+# CONFUSION MATRIX OUTPUT
+# =============================================================================
+
+def build_confusion_rows(
+    neomundi: dict[str, Any],
+    baseline: dict[str, Any],
 ) -> list[dict[str, Any]]:
 
-    return [
-        {
-            "result_type": "VP",
-            "count": result["tp"],
-            "definition": (
-                "Vérité terrain POSITIVE et signal NeoMundi SIGNAL_POSITIVE"
-            ),
-        },
-        {
-            "result_type": "FP",
-            "count": result["fp"],
-            "definition": (
-                "Vérité terrain NEGATIVE et signal NeoMundi SIGNAL_POSITIVE"
-            ),
-        },
-        {
-            "result_type": "VN",
-            "count": result["tn"],
-            "definition": (
-                "Vérité terrain NEGATIVE et signal NeoMundi SIGNAL_NEGATIVE"
-            ),
-        },
-        {
-            "result_type": "FN",
-            "count": result["fn"],
-            "definition": (
-                "Vérité terrain POSITIVE et signal NeoMundi SIGNAL_NEGATIVE"
-            ),
-        },
-        {
-            "result_type": "SIGNAL_UNAVAILABLE",
-            "count": result["unavailable"],
-            "definition": (
-                "Aucun signal exploitable produit pour le cas"
-            ),
-        },
-        {
-            "result_type": "COMPUTATION_ERROR",
-            "count": result["computation_errors"],
-            "definition": (
-                "Erreur technique lors du calcul ou du traitement"
-            ),
-        },
-        {
-            "result_type": "FALLBACK_EXPLICITLY_EXPOSED",
-            "count": result["fallback_count"],
-            "definition": (
-                "Fallback explicitement exposé par la réponse API"
-            ),
-        },
-    ]
+    rows: list[
+        dict[str, Any]
+    ] = []
+
+    for system, result in [
+        (
+            "NEOMUNDI_MET003",
+            neomundi,
+        ),
+        (
+            "DETERMINISTIC_BASELINE",
+            baseline,
+        ),
+    ]:
+
+        rows.extend(
+            [
+                {
+                    "system": system,
+                    "result_type": "VP",
+                    "count": result["tp"],
+                    "definition": (
+                        "Vérité POSITIVE et classification positive"
+                    ),
+                },
+                {
+                    "system": system,
+                    "result_type": "FP",
+                    "count": result["fp"],
+                    "definition": (
+                        "Vérité NEGATIVE et classification positive"
+                    ),
+                },
+                {
+                    "system": system,
+                    "result_type": "VN",
+                    "count": result["tn"],
+                    "definition": (
+                        "Vérité NEGATIVE et classification négative"
+                    ),
+                },
+                {
+                    "system": system,
+                    "result_type": "FN",
+                    "count": result["fn"],
+                    "definition": (
+                        "Vérité POSITIVE et classification négative"
+                    ),
+                },
+                {
+                    "system": system,
+                    "result_type": "UNAVAILABLE_OR_UNDETERMINED",
+                    "count": result["unavailable"],
+                    "definition": (
+                        "Résultat indisponible ou baseline indéterminée"
+                    ),
+                },
+                {
+                    "system": system,
+                    "result_type": "COMPUTATION_ERROR",
+                    "count": result["errors"],
+                    "definition": (
+                        "Erreur technique de calcul"
+                    ),
+                },
+            ]
+        )
+
+    return rows
+
+
+# =============================================================================
+# REPORT HELPERS
+# =============================================================================
+
+def mean_or_none(
+    values: list[float],
+) -> float | None:
+
+    if not values:
+        return None
+
+    return statistics.mean(
+        values
+    )
+
+
+def median_or_none(
+    values: list[float],
+) -> float | None:
+
+    if not values:
+        return None
+
+    return statistics.median(
+        values
+    )
+
+
+def min_or_none(
+    values: list[float],
+) -> float | None:
+
+    if not values:
+        return None
+
+    return min(
+        values
+    )
+
+
+def max_or_none(
+    values: list[float],
+) -> float | None:
+
+    if not values:
+        return None
+
+    return max(
+        values
+    )
+
+
+def render_list(
+    values: list[str],
+) -> str:
+
+    if not values:
+        return "non exposé / non disponible"
+
+    return ", ".join(
+        values
+    )
+
+
+# =============================================================================
+# HASH MANIFEST
+# =============================================================================
+
+def build_hash_manifest(
+    generated_at: str,
+) -> dict[str, Any]:
+
+    files = {
+        "corpus": CORPUS_PATH,
+        "neomundi_outputs": NEOMUNDI_OUTPUT_PATH,
+        "error_log": ERROR_LOG_PATH,
+        "baseline_outputs": BASELINE_OUTPUT_PATH,
+        "confusion_matrix": CONFUSION_MATRIX_PATH,
+    }
+
+    hashes: dict[
+        str,
+        str,
+    ] = {}
+
+    for key, path in files.items():
+
+        if not path.exists():
+            raise RuntimeError(
+                f"Impossible de hasher : {path}"
+            )
+
+        hashes[key] = sha256_file(
+            path
+        )
+
+    return {
+        "experiment_id": EXPERIMENT_ID,
+        "experiment_version": EXPERIMENT_VERSION,
+        "run_id": RUN_ID,
+        "analyzer_version": ANALYZER_VERSION,
+        "baseline_version": BASELINE_VERSION,
+        "algorithm": "SHA-256",
+        "generated_at": generated_at,
+        "files": hashes,
+    }
 
 
 # =============================================================================
 # REPORT
 # =============================================================================
 
-def mean_or_none(
-    values: list[float],
-) -> float | None:
-    if not values:
-        return None
-
-    return statistics.mean(values)
-
-
-def median_or_none(
-    values: list[float],
-) -> float | None:
-    if not values:
-        return None
-
-    return statistics.median(values)
-
-
-def min_or_none(
-    values: list[float],
-) -> float | None:
-    if not values:
-        return None
-
-    return min(values)
-
-
-def max_or_none(
-    values: list[float],
-) -> float | None:
-    if not values:
-        return None
-
-    return max(values)
-
-
-def render_list(
-    values: list[str],
-) -> str:
-    if not values:
-        return "non exposé / non disponible"
-
-    return ", ".join(values)
-
-
 def build_report(
-    manifest: dict[str, Any],
-    result: dict[str, Any],
+    neomundi: dict[str, Any],
+    baseline: dict[str, Any],
     hashes: dict[str, str],
 ) -> str:
 
-    positive_scores = result["positive_scores"]
-    negative_scores = result["negative_scores"]
-    api_latencies = result["api_latencies"]
-    processing_times = result["processing_times"]
-
-    baseline_summary = (
-        "20 décisions déterministes produites, indépendamment "
-        "des sorties NeoMundi."
-    )
-
     technical_success = (
-        result["classified"] == EXPECTED_CASE_COUNT
-        and result["unavailable"] == 0
-        and result["computation_errors"] == 0
+        neomundi["classified"]
+        == EXPECTED_CASE_COUNT
+        and neomundi["unavailable"] == 0
+        and neomundi["errors"] == 0
     )
 
-    if technical_success:
-        technical_status = "RÉUSSI"
-    else:
-        technical_status = "À REVOIR"
+    technical_status = (
+        "RÉUSSI"
+        if technical_success
+        else "À REVOIR"
+    )
+
+    positive_scores = neomundi[
+        "positive_scores"
+    ]
+
+    negative_scores = neomundi[
+        "negative_scores"
+    ]
+
+    api_latencies = neomundi[
+        "api_latencies"
+    ]
+
+    processing_times = neomundi[
+        "processing_times"
+    ]
 
     return f"""# EXP-001 — Rapport du smoke test
 
@@ -902,85 +1559,110 @@ def build_report(
 - **Version :** `{EXPERIMENT_VERSION}`
 - **Run :** `{RUN_ID}`
 - **Analyseur :** `{ANALYZER_VERSION}`
+- **Baseline :** `{BASELINE_VERSION}`
 - **Métrique :** `{METRIC_ID}`
 - **Seuil expérimental gelé :** `{THRESHOLD_OPERATOR} {THRESHOLD_VALUE}`
-- **Date de génération du rapport :** `{utc_now_iso()}`
-- **Statut technique du smoke test :** **{technical_status}**
+- **Date de génération :** `{utc_now_iso()}`
+- **Statut technique :** **{technical_status}**
 
 ---
 
 ## 2. Objet
 
-Ce smoke test vérifie le fonctionnement technique et méthodologique de la chaîne expérimentale de `MET-003` sur un corpus synthétique gelé de 20 cas.
+EXP-001 est un smoke test technique et méthodologique sur un corpus synthétique gelé de 20 cas.
 
-Il ne constitue pas une validation scientifique générale de la performance du signal.
+Il vise à vérifier le fonctionnement de la chaîne expérimentale, la séparation des responsabilités et la production d'artefacts reproductibles.
 
-Il ne permet pas de conclure à une performance représentative sur des données réelles ou sur une distribution naturelle d’erreurs factuelles.
-
----
-
-## 3. Corpus
-
-- **Nombre total de cas :** {EXPECTED_CASE_COUNT}
-- **Cas POSITIVE :** {EXPECTED_POSITIVE_COUNT}
-- **Cas NEGATIVE :** {EXPECTED_NEGATIVE_COUNT}
-- **SHA-256 gelé du corpus :** `{EXPECTED_CORPUS_SHA256}`
-- **Corpus modifié pendant l’analyse :** non
+Il ne constitue pas une validation scientifique générale de `MET-003`.
 
 ---
 
-## 4. Baseline déterministe
+## 3. Séparation méthodologique
 
-La baseline est indépendante de NeoMundi et n’utilise aucun modèle juge.
+Trois niveaux sont maintenus séparément :
 
-Pour le corpus synthétique gelé EXP-001 v0.1 :
+1. **vérité terrain gelée** ;
+2. **baseline déterministe indépendante** ;
+3. **signal NeoMundi MET-003**.
 
-- `NEGATIVE` → `FACTUALLY_CORRECT`
-- `POSITIVE` → `FACTUALLY_INCORRECT`
+La baseline est calculée avant toute comparaison avec la vérité terrain.
 
-Résultat :
+Sa fonction de décision reçoit uniquement :
 
-> {baseline_summary}
+- `prompt`
+- `response`
 
-Cette baseline ne reçoit aucun score NeoMundi et aucune sortie runtime.
+Elle ne reçoit jamais :
 
----
-
-## 5. Résultats NeoMundi
-
-- **Cas classifiés :** {result["classified"]}/{EXPECTED_CASE_COUNT}
-- **Signaux indisponibles :** {result["unavailable"]}
-- **Erreurs de calcul :** {result["computation_errors"]}
-- **Fallbacks explicitement exposés par l’API :** {result["fallback_count"]}
-- **Statuts fallback observés :** {render_list(result["fallback_statuses"])}
-
-### Matrice de confusion
-
-| | Signal positif | Signal négatif |
-|---|---:|---:|
-| Vérité POSITIVE | VP = {result["tp"]} | FN = {result["fn"]} |
-| Vérité NEGATIVE | FP = {result["fp"]} | VN = {result["tn"]} |
+- `ground_truth_label`
+- `final_label`
+- score NeoMundi
+- classification NeoMundi
+- labels des évaluateurs.
 
 ---
 
-## 6. Métriques techniques sur ce corpus
+## 4. Corpus
 
-- **Précision :** {pct(result["precision"])}
-- **Rappel :** {pct(result["recall"])}
-- **Spécificité :** {pct(result["specificity"])}
-- **Taux de faux positifs :** {pct(result["false_positive_rate"])}
-- **Taux de faux négatifs :** {pct(result["false_negative_rate"])}
-- **F1 :** {decimal(result["f1"])}
-- **Accuracy descriptive :** {pct(result["accuracy"])}
-- **Couverture :** {pct(result["coverage"])}
-
-Ces valeurs décrivent uniquement les 20 cas synthétiques gelés de ce smoke test.
-
-Elles ne doivent pas être interprétées comme une estimation robuste ou généralisable de performance.
+- **Cas :** {EXPECTED_CASE_COUNT}
+- **POSITIVE :** {EXPECTED_POSITIVE_COUNT}
+- **NEGATIVE :** {EXPECTED_NEGATIVE_COUNT}
+- **SHA-256 :** `{EXPECTED_CORPUS_SHA256}`
 
 ---
 
-## 7. Distribution des scores MET-003
+## 5. Baseline déterministe indépendante
+
+Méthode :
+
+`DETERMINISTIC_PROMPT_RESPONSE_RULES`
+
+La baseline contient dix règles déterministes correspondant aux dix familles de faits fermés du corpus.
+
+### Résultats baseline
+
+- **VP :** {baseline["tp"]}
+- **FP :** {baseline["fp"]}
+- **VN :** {baseline["tn"]}
+- **FN :** {baseline["fn"]}
+- **Indéterminés :** {baseline["unavailable"]}
+- **Couverture :** {pct(baseline["coverage"])}
+- **Précision :** {pct(baseline["precision"])}
+- **Rappel :** {pct(baseline["recall"])}
+- **Spécificité :** {pct(baseline["specificity"])}
+- **F1 :** {decimal(baseline["f1"])}
+
+Ces résultats concernent uniquement la baseline déterministe sur ce corpus contrôlé.
+
+---
+
+## 6. Résultats NeoMundi MET-003
+
+- **VP :** {neomundi["tp"]}
+- **FP :** {neomundi["fp"]}
+- **VN :** {neomundi["tn"]}
+- **FN :** {neomundi["fn"]}
+- **Signaux indisponibles :** {neomundi["unavailable"]}
+- **Erreurs de calcul :** {neomundi["errors"]}
+- **Couverture :** {pct(neomundi["coverage"])}
+
+### Métriques descriptives
+
+- **Précision :** {pct(neomundi["precision"])}
+- **Rappel :** {pct(neomundi["recall"])}
+- **Spécificité :** {pct(neomundi["specificity"])}
+- **Taux de faux positifs :** {pct(neomundi["false_positive_rate"])}
+- **Taux de faux négatifs :** {pct(neomundi["false_negative_rate"])}
+- **F1 :** {decimal(neomundi["f1"])}
+- **Accuracy descriptive :** {pct(neomundi["accuracy"])}
+
+Ces valeurs décrivent uniquement les 20 cas synthétiques gelés.
+
+Elles ne constituent pas une estimation généralisable de performance.
+
+---
+
+## 7. Distribution de MET-003
 
 ### Cas POSITIVE
 
@@ -1002,39 +1684,30 @@ Elles ne doivent pas être interprétées comme une estimation robuste ou géné
 
 ## 8. Environnement observé
 
-- **Runner version :** {render_list(result["runner_versions"])}
-- **GitHub run ID :** {render_list(result["github_run_ids"])}
-- **GitHub run attempt :** {render_list(result["github_run_attempts"])}
-- **Measurement version :** {render_list(result["measurement_versions"])}
-- **Normalizer version :** {render_list(result["normalizer_versions"])}
-- **Juge configuré dans le manifeste :** {render_list(result["judge_models_configured"])}
-- **Juge explicitement exposé par l’API :** {render_list(result["judge_models_exposed"])}
-
-Le fait que le modèle juge configuré soit documenté dans le manifeste ne signifie pas nécessairement qu’il est exposé dans chaque réponse API.
+- **Runner version :** {render_list(neomundi["runner_versions"])}
+- **GitHub run ID :** {render_list(neomundi["github_run_ids"])}
+- **GitHub run attempt :** {render_list(neomundi["github_run_attempts"])}
+- **Measurement version :** {render_list(neomundi["measurement_versions"])}
+- **Normalizer version :** {render_list(neomundi["normalizer_versions"])}
+- **Juge configuré :** {render_list(neomundi["judge_models_configured"])}
+- **Juge exposé par l'API :** {render_list(neomundi["judge_models_exposed"])}
 
 ---
 
 ## 9. Fallback
 
-Le runner conserve le statut de fallback de manière conservatrice.
+- **Fallbacks explicitement exposés :** {neomundi["fallback_explicit_count"]}
+- **Statuts observés :** {render_list(neomundi["fallback_statuses"])}
 
-Lorsque l’API ne fournit pas explicitement cette information, le statut :
+`UNKNOWN_NOT_EXPOSED` signifie uniquement que l'API n'a pas exposé cette information.
 
-`UNKNOWN_NOT_EXPOSED`
-
-est conservé.
-
-Il ne doit pas être interprété comme :
-
-`NO_FALLBACK`.
-
-Par conséquent, ce smoke test ne permet pas d’affirmer qu’aucun fallback n’a eu lieu si cette information n’est pas exposée par l’API.
+Il ne signifie pas `NO_FALLBACK`.
 
 ---
 
-## 10. Latence observée
+## 10. Latence
 
-### Latence API mesurée côté runner
+### Latence côté runner
 
 - **n :** {len(api_latencies)}
 - **minimum :** {decimal(min_or_none(api_latencies))} ms
@@ -1042,7 +1715,7 @@ Par conséquent, ce smoke test ne permet pas d’affirmer qu’aucun fallback n�
 - **moyenne :** {decimal(mean_or_none(api_latencies))} ms
 - **médiane :** {decimal(median_or_none(api_latencies))} ms
 
-### Processing time retourné par l’API
+### Processing time API
 
 - **n :** {len(processing_times)}
 - **minimum :** {decimal(min_or_none(processing_times))} ms
@@ -1050,11 +1723,11 @@ Par conséquent, ce smoke test ne permet pas d’affirmer qu’aucun fallback n�
 - **moyenne :** {decimal(mean_or_none(processing_times))} ms
 - **médiane :** {decimal(median_or_none(processing_times))} ms
 
-Ces mesures sont descriptives du run et ne constituent pas un benchmark de performance d’infrastructure.
+Ces valeurs sont descriptives du run et ne constituent pas un benchmark d'infrastructure.
 
 ---
 
-## 11. Traçabilité des artefacts
+## 11. Traçabilité
 
 Algorithme :
 
@@ -1062,103 +1735,62 @@ Algorithme :
 
 - **Corpus :** `{hashes.get("corpus", "")}`
 - **Sorties NeoMundi :** `{hashes.get("neomundi_outputs", "")}`
-- **Journal d’erreurs :** `{hashes.get("error_log", "")}`
-- **Sorties baseline :** `{hashes.get("baseline_outputs", "")}`
+- **Journal d'erreurs :** `{hashes.get("error_log", "")}`
+- **Baseline :** `{hashes.get("baseline_outputs", "")}`
 - **Matrice de confusion :** `{hashes.get("confusion_matrix", "")}`
-
-Le hash du présent rapport est enregistré séparément après sa génération dans le manifeste de hashes des artefacts.
 
 ---
 
 ## 12. Conclusion technique
 
-Le smoke test est déclaré techniquement **{technical_status}** si les conditions suivantes sont remplies :
+Statut :
 
-- les 20 cas sont chargés ;
-- le hash du corpus gelé est identique ;
-- chaque cas est relié à une sortie NeoMundi ;
-- aucune ligne n’est perdue ;
-- aucune erreur de calcul n’est présente ;
-- aucun signal n’est indisponible ;
-- la baseline est produite indépendamment ;
+**{technical_status}**
+
+Le smoke test confirme uniquement que la chaîne expérimentale EXP-001 fonctionne techniquement sur le corpus synthétique contrôlé si :
+
+- les 20 cas sont traités ;
+- le corpus reste identique à son hash gelé ;
+- les sorties sont reliées aux `case_id` ;
+- la baseline est calculée indépendamment ;
+- les erreurs et indisponibilités sont explicitement tracées ;
 - la matrice de confusion est calculable ;
-- les sorties peuvent être hashées.
-
-Résultat observé :
-
-- **VP :** {result["tp"]}
-- **FP :** {result["fp"]}
-- **VN :** {result["tn"]}
-- **FN :** {result["fn"]}
-- **Signal indisponible :** {result["unavailable"]}
-- **Erreur de calcul :** {result["computation_errors"]}
+- les artefacts sont hashables.
 
 ---
 
 ## 13. Non-claims
 
-Ce smoke test ne permet pas d’affirmer :
+EXP-001 ne permet pas d'affirmer :
 
 - que `MET-003` est scientifiquement validé ;
 - que le seuil `0.5` est optimal ;
-- que la performance observée est généralisable ;
+- que les performances observées sont généralisables ;
 - que le corpus représente une prévalence réelle ;
-- qu’une absence de signal prouve qu’une réponse est vraie ;
-- qu’un signal constitue à lui seul une preuve indépendante de fausseté ;
-- qu’aucun fallback n’a eu lieu lorsque cette information n’est pas exposée ;
-- qu’un claim commercial général peut être dérivé de ces 20 cas.
+- qu'une absence d'alerte prouve qu'une réponse est vraie ;
+- qu'une alerte constitue une preuve indépendante de fausseté ;
+- qu'aucun fallback n'a eu lieu lorsque l'information n'est pas exposée ;
+- qu'un claim commercial général peut être dérivé de ce smoke test.
 
 ---
 
 ## 14. Étape suivante
 
-Effectuer une revue humaine post-run des sorties brutes, notamment :
+Effectuer la revue humaine post-run des résultats sans modifier :
 
-- cohérence entre score et classification ;
-- faux positifs ;
-- faux négatifs ;
-- résultats techniques atypiques ;
-- statut de fallback ;
-- éventuelles divergences entre baseline et NeoMundi.
+- le corpus ;
+- la vérité terrain ;
+- la baseline ;
+- le seuil ;
+- le protocole ;
+- les sorties brutes NeoMundi.
 
-Cette revue doit rester séparée des sorties brutes et ne doit modifier ni le corpus, ni les labels, ni le seuil, ni les résultats du run.
+Après cette revue, décider soit :
+
+1. de clôturer EXP-001 comme smoke test techniquement réussi ;
+2. de corriger un problème de chaîne identifié ;
+3. de préparer une expérience suivante sur un corpus plus large et plus difficile.
 """
-
-
-# =============================================================================
-# HASHES
-# =============================================================================
-
-def build_hash_manifest(
-    generated_at: str,
-) -> dict[str, Any]:
-
-    files = {
-        "corpus": CORPUS_PATH,
-        "neomundi_outputs": NEOMUNDI_OUTPUT_PATH,
-        "error_log": ERROR_LOG_PATH,
-        "baseline_outputs": BASELINE_OUTPUT_PATH,
-        "confusion_matrix": CONFUSION_MATRIX_PATH,
-    }
-
-    hashes: dict[str, str] = {}
-
-    for key, path in files.items():
-        if not path.exists():
-            raise RuntimeError(
-                f"Impossible de hasher : {path}"
-            )
-
-        hashes[key] = sha256_file(path)
-
-    return {
-        "experiment_id": EXPERIMENT_ID,
-        "experiment_version": EXPERIMENT_VERSION,
-        "run_id": RUN_ID,
-        "algorithm": "SHA-256",
-        "generated_at": generated_at,
-        "files": hashes,
-    }
 
 
 # =============================================================================
@@ -1166,9 +1798,12 @@ def build_hash_manifest(
 # =============================================================================
 
 def main() -> int:
+
     print("=" * 72)
     print("NeoMundi Metrology Validation")
-    print("EXP-001 — Post-run Analyzer v0.1")
+    print(
+        f"EXP-001 — Post-run Analyzer {ANALYZER_VERSION}"
+    )
     print("=" * 72)
     print()
 
@@ -1177,30 +1812,48 @@ def main() -> int:
         exist_ok=True,
     )
 
-    print("[1/7] Vérification du corpus gelé...")
+    # -------------------------------------------------------------------------
+    # 1. Frozen corpus
+    # -------------------------------------------------------------------------
+
+    print(
+        "[1/8] Vérification du corpus gelé..."
+    )
 
     corpus = verify_corpus()
 
     print(
-        f"      OK — {len(corpus)} cas, "
-        f"SHA-256 {EXPECTED_CORPUS_SHA256}"
+        f"      OK — {len(corpus)} cas"
     )
 
-    print("[2/7] Vérification des sorties NeoMundi...")
+    # -------------------------------------------------------------------------
+    # 2. NeoMundi outputs
+    # -------------------------------------------------------------------------
+
+    print(
+        "[2/8] Vérification des sorties NeoMundi..."
+    )
 
     outputs = verify_neomundi_outputs(
         corpus
     )
 
     print(
-        f"      OK — {len(outputs)} sorties reliées "
-        "aux 20 case_id."
+        f"      OK — {len(outputs)} sorties"
     )
 
-    print("[3/7] Construction de la baseline déterministe...")
+    # -------------------------------------------------------------------------
+    # 3. Independent baseline
+    # -------------------------------------------------------------------------
 
-    baseline_rows = build_baseline(
-        corpus
+    print(
+        "[3/8] Exécution de la baseline déterministe indépendante..."
+    )
+
+    baseline_rows = (
+        build_independent_baseline(
+            corpus
+        )
     )
 
     write_csv(
@@ -1209,19 +1862,65 @@ def main() -> int:
         baseline_rows,
     )
 
-    print(
-        f"      OK — {BASELINE_OUTPUT_PATH}"
+    baseline_undetermined = sum(
+        row[
+            "baseline_decision"
+        ] == "UNDETERMINED"
+        for row in baseline_rows
     )
 
-    print("[4/7] Calcul de la matrice de confusion...")
+    print(
+        f"      OK — {len(baseline_rows)} décisions, "
+        f"{baseline_undetermined} indéterminée(s)"
+    )
 
-    result = compare_results(
+    # -------------------------------------------------------------------------
+    # 4. Comparisons
+    # -------------------------------------------------------------------------
+
+    print(
+        "[4/8] Comparaison avec la vérité terrain..."
+    )
+
+    neomundi_result = compare_neomundi(
         corpus,
         outputs,
     )
 
-    confusion_rows = build_confusion_matrix_rows(
-        result
+    baseline_result = compare_baseline(
+        corpus,
+        baseline_rows,
+    )
+
+    print(
+        "      NeoMundi : "
+        f"VP={neomundi_result['tp']} "
+        f"FP={neomundi_result['fp']} "
+        f"VN={neomundi_result['tn']} "
+        f"FN={neomundi_result['fn']}"
+    )
+
+    print(
+        "      Baseline : "
+        f"VP={baseline_result['tp']} "
+        f"FP={baseline_result['fp']} "
+        f"VN={baseline_result['tn']} "
+        f"FN={baseline_result['fn']}"
+    )
+
+    # -------------------------------------------------------------------------
+    # 5. Confusion matrices
+    # -------------------------------------------------------------------------
+
+    print(
+        "[5/8] Génération des matrices de confusion..."
+    )
+
+    confusion_rows = (
+        build_confusion_rows(
+            neomundi_result,
+            baseline_result,
+        )
     )
 
     write_csv(
@@ -1231,31 +1930,44 @@ def main() -> int:
     )
 
     print(
-        f"      VP={result['tp']} "
-        f"FP={result['fp']} "
-        f"VN={result['tn']} "
-        f"FN={result['fn']}"
+        f"      OK — {CONFUSION_MATRIX_PATH}"
     )
 
-    print("[5/7] Hash des artefacts intermédiaires...")
+    # -------------------------------------------------------------------------
+    # 6. Hashes before report
+    # -------------------------------------------------------------------------
+
+    print(
+        "[6/8] Calcul des hashes..."
+    )
 
     generated_at = utc_now_iso()
 
-    hash_manifest = build_hash_manifest(
-        generated_at
+    hash_manifest = (
+        build_hash_manifest(
+            generated_at
+        )
     )
 
-    hashes = hash_manifest["files"]
+    hashes = hash_manifest[
+        "files"
+    ]
 
-    print("      OK")
+    print(
+        "      OK"
+    )
 
-    print("[6/7] Génération du rapport FR...")
+    # -------------------------------------------------------------------------
+    # 7. Report
+    # -------------------------------------------------------------------------
 
-    manifest = load_manifest()
+    print(
+        "[7/8] Génération du rapport FR..."
+    )
 
     report = build_report(
-        manifest,
-        result,
+        neomundi_result,
+        baseline_result,
         hashes,
     )
 
@@ -1268,7 +1980,9 @@ def main() -> int:
         REPORT_PATH
     )
 
-    hash_manifest["files"][
+    hash_manifest[
+        "files"
+    ][
         "report_fr"
     ] = report_hash
 
@@ -1286,59 +2000,98 @@ def main() -> int:
         f"      OK — {REPORT_PATH}"
     )
 
-    print("[7/7] Résumé")
+    # -------------------------------------------------------------------------
+    # 8. Final summary
+    # -------------------------------------------------------------------------
+
+    print(
+        "[8/8] Résumé"
+    )
 
     print()
-    print(f"      VP                    : {result['tp']}")
-    print(f"      FP                    : {result['fp']}")
-    print(f"      VN                    : {result['tn']}")
-    print(f"      FN                    : {result['fn']}")
+    print("      NeoMundi")
     print(
-        f"      Signaux indisponibles : "
-        f"{result['unavailable']}"
+        f"        VP          : {neomundi_result['tp']}"
     )
     print(
-        f"      Erreurs de calcul     : "
-        f"{result['computation_errors']}"
+        f"        FP          : {neomundi_result['fp']}"
     )
     print(
-        f"      Couverture            : "
-        f"{pct(result['coverage'])}"
+        f"        VN          : {neomundi_result['tn']}"
     )
     print(
-        f"      Précision             : "
-        f"{pct(result['precision'])}"
+        f"        FN          : {neomundi_result['fn']}"
     )
     print(
-        f"      Rappel                : "
-        f"{pct(result['recall'])}"
+        f"        Couverture  : {pct(neomundi_result['coverage'])}"
+    )
+
+    print()
+    print("      Baseline indépendante")
+    print(
+        f"        VP          : {baseline_result['tp']}"
     )
     print(
-        f"      Spécificité           : "
-        f"{pct(result['specificity'])}"
+        f"        FP          : {baseline_result['fp']}"
     )
     print(
-        f"      F1                    : "
-        f"{decimal(result['f1'])}"
+        f"        VN          : {baseline_result['tn']}"
     )
+    print(
+        f"        FN          : {baseline_result['fn']}"
+    )
+    print(
+        f"        Indéterminés: {baseline_result['unavailable']}"
+    )
+    print(
+        f"        Couverture  : {pct(baseline_result['coverage'])}"
+    )
+
     print()
 
     technical_success = (
-        result["classified"] == EXPECTED_CASE_COUNT
-        and result["unavailable"] == 0
-        and result["computation_errors"] == 0
+        neomundi_result[
+            "classified"
+        ]
+        == EXPECTED_CASE_COUNT
+        and neomundi_result[
+            "unavailable"
+        ]
+        == 0
+        and neomundi_result[
+            "errors"
+        ]
+        == 0
+    )
+
+    baseline_complete = (
+        baseline_result[
+            "classified"
+        ]
+        == EXPECTED_CASE_COUNT
+        and baseline_result[
+            "unavailable"
+        ]
+        == 0
     )
 
     if not technical_success:
         print(
-            "ANALYSIS COMPLETED WITH TECHNICAL ISSUES",
+            "ANALYSIS COMPLETED WITH NEOMUNDI TECHNICAL ISSUES",
             file=sys.stderr,
         )
         return 2
 
+    if not baseline_complete:
+        print(
+            "ANALYSIS COMPLETED WITH BASELINE UNDETERMINED CASES",
+            file=sys.stderr,
+        )
+        return 3
+
     print(
-        "ANALYSIS COMPLETED — smoke-test technical chain "
-        "is analyzable."
+        "ANALYSIS COMPLETED — "
+        "NeoMundi and independent baseline are analyzable."
     )
 
     print(
@@ -1350,23 +2103,35 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+
     try:
-        sys.exit(main())
+        sys.exit(
+            main()
+        )
 
     except KeyboardInterrupt:
+
         print(
             "\nAnalyse interrompue manuellement.",
             file=sys.stderr,
         )
-        sys.exit(130)
+
+        sys.exit(
+            130
+        )
 
     except Exception as exc:
+
         print(
             "\nANALYSIS FAILED",
             file=sys.stderr,
         )
+
         print(
             f"{type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
-        sys.exit(1)
+
+        sys.exit(
+            1
+        )
