@@ -1,0 +1,57 @@
+name: Run EXP-001 Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-exp001:
+    name: Execute EXP-001
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Display execution environment
+        run: |
+          python --version
+          uname -a
+
+      - name: Validate frozen EXP-001 corpus
+        run: |
+          python scripts/validate_exp001_smoke_test.py --stage frozen
+
+      - name: Verify runner syntax
+        run: |
+          python -m py_compile scripts/run_exp001_smoke_test.py
+
+      - name: Execute EXP-001 smoke test
+        env:
+          NEOMUNDI_API_KEY: ${{ secrets.NEOMUNDI_API_KEY }}
+          NEOMUNDI_BASE_URL: https://api.neomundi.io
+        run: |
+          python scripts/run_exp001_smoke_test.py
+
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "Generated EXP-001 files:"
+          find results/EXP-001 -maxdepth 1 -type f -print 2>/dev/null || true
+
+      - name: Upload EXP-001 raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXP001-SMOKE-RUN-001-results
+          path: results/EXP-001/
+          if-no-files-found: warn
+          retention-days: 90
