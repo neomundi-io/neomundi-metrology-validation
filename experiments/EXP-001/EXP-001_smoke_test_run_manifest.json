@@ -1,5 +1,5 @@
 {
-  "experiment_id": "EXP-001",
+  "experiment_id": "EXP-001", 
   "experiment_version": "v0.1",
   "run_id": "EXP001-SMOKE-RUN-001",
   "run_type": "SMOKE_TEST",
