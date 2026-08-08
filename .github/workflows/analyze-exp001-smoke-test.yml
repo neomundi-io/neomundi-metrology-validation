@@ -1,0 +1,68 @@
+name: Analyze EXP-001 Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "GitHub run ID containing EXP001-SMOKE-RUN-001-results"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze-exp001:
+    name: Analyze EXP-001
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify analyzer syntax
+        run: |
+          python -m py_compile scripts/analyze_exp001_smoke_test.py
+
+      - name: Download raw EXP-001 results
+        uses: actions/download-artifact@v5
+        with:
+          name: EXP001-SMOKE-RUN-001-results
+          path: results/EXP-001
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show downloaded raw files
+        run: |
+          echo "Raw files downloaded:"
+          find results/EXP-001 -maxdepth 1 -type f -print
+
+      - name: Analyze EXP-001
+        run: |
+          python scripts/analyze_exp001_smoke_test.py
+
+      - name: Show generated analysis files
+        run: |
+          echo "EXP-001 analysis files:"
+          find results/EXP-001 -maxdepth 1 -type f -print
+
+      - name: Upload EXP-001 analyzed results
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXP001-SMOKE-RUN-001-analysis
+          path: |
+            results/EXP-001/EXP-001_smoke_test_neomundi_outputs.csv
+            results/EXP-001/EXP-001_smoke_test_error_log.csv
+            results/EXP-001/EXP-001_smoke_test_baseline_outputs.csv
+            results/EXP-001/EXP-001_smoke_test_confusion_matrix.csv
+            results/EXP-001/EXP-001_smoke_test_report_FR.md
+            results/EXP-001/EXP-001_smoke_test_artifact_hashes.json
+          if-no-files-found: error
+          retention-days: 90
