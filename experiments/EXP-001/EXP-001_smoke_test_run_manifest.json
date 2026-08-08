@@ -3,11 +3,14 @@
   "experiment_version": "v0.1",
   "run_id": "EXP001-SMOKE-RUN-001",
   "run_type": "SMOKE_TEST",
-  "status": "AUTHORIZED_FOR_EXECUTION",
+  "status": "SMOKE_TEST_TECHNICALLY_SUCCESSFUL",
+
   "created_at": "2026-07-27T00:00:00Z",
-  "last_updated_at": "2026-08-08T15:12:52Z",
-  "started_at": null,
-  "completed_at": null,
+  "last_updated_at": "2026-08-08T16:41:20Z",
+  "started_at": "2026-08-08T16:03:59.959303Z",
+  "completed_at": "2026-08-08T16:10:45.666103Z",
+  "analysis_completed_at": "2026-08-08T16:28:42.963478Z",
+  "closed_at": "2026-08-08T16:41:20Z",
 
   "objective": {
     "fr": "Vérifier le fonctionnement technique et méthodologique de la chaîne de validation factuelle.",
@@ -26,6 +29,7 @@
     "claim_id": "CLM-003",
     "name_fr": "NeoMundi produit des signaux de risque factuel",
     "status_before_run": "HYPOTHETICAL",
+    "status_after_run": "NOT_SCIENTIFICALLY_VALIDATED_BY_SMOKE_TEST",
     "new_claim_authorized_after_smoke_test": false
   },
 
@@ -91,7 +95,18 @@
     "name_fr": "Baseline déterministe indépendante de factualité",
     "protocol_file": "experiments/EXP-001/EXP-001_factuality_baseline_FR.md",
     "version": "v0.1",
-    "implementation": "DETERMINISTIC_REFERENCE_COMPARISON",
+    "implementation": "DETERMINISTIC_PROMPT_RESPONSE_RULES",
+    "decision_inputs": [
+      "prompt",
+      "response"
+    ],
+    "forbidden_decision_inputs": [
+      "ground_truth_label",
+      "final_label",
+      "reviewer_labels",
+      "neomundi_score",
+      "neomundi_classification"
+    ],
     "decision_classes": [
       "FACTUALLY_CORRECT",
       "FACTUALLY_INCORRECT",
@@ -99,8 +114,10 @@
     ],
     "judge_model": null,
     "judge_version": null,
-    "temperature": null,
     "independent_from_neomundi": true,
+    "independent_from_ground_truth_during_decision": true,
+    "analyzer_implementation": "scripts/analyze_exp001_smoke_test.py",
+    "analyzer_version": "v0.2",
     "freeze_status": "FROZEN",
     "freeze_date": "2026-08-02",
     "modification_after_freeze": "REQUIRES_NEW_BASELINE_VERSION"
@@ -126,7 +143,7 @@
     "freeze_date": "2026-08-02"
   },
 
-  "review": {
+  "corpus_review": {
     "review_status": "COMPLETED_FOR_20_CASES",
     "primary_reviewer": "Sebastien",
     "reviewer_blinded_to_neomundi_outputs": true,
@@ -135,6 +152,23 @@
     "approved_case_count": 20,
     "rejected_case_count": 0,
     "excluded_case_count": 0
+  },
+
+  "post_run_human_review": {
+    "file": "results/EXP-001/EXP-001_smoke_test_human_review_FR.md",
+    "status": "HUMAN_REVIEW_COMPLETED",
+    "decision": "TECHNICALLY_SUCCESSFUL",
+    "reviewer": "Sebastien",
+    "review_date": "2026-08-08",
+    "false_positive_count": 0,
+    "false_negative_count": 0,
+    "computation_error_count": 0,
+    "unavailable_signal_count": 0,
+    "score_classification_inconsistency_count": 0,
+    "raw_outputs_modified": false,
+    "frozen_corpus_modified": false,
+    "threshold_modified": false,
+    "protocol_modified": false
   },
 
   "validation": {
@@ -169,15 +203,123 @@
     "freeze_anchor_role": "EXPERIMENTAL_REPOSITORY_AUDIT_ANCHOR",
     "freeze_anchor_recorded": true,
     "freeze_anchor_date": "2026-08-02",
-    "note_fr": "Le commit 7b29408 constitue l’ancre du repository expérimental après gel de la métrique, du seuil, de la baseline, du protocole, du corpus et mise à jour initiale du manifeste. Les commits ultérieurs de documentation du manifeste ne modifient pas les éléments expérimentaux gelés."
+    "note_fr": "Le commit 7b29408 constitue l’ancre du repository expérimental après gel de la métrique, du seuil, de la baseline, du protocole et du corpus. Les commits ultérieurs concernent l’environnement, l’exécution, l’analyse, la revue et la clôture sans modifier les éléments expérimentaux gelés."
   },
 
-  "expected_outputs": {
-    "neomundi_outputs": "results/EXP-001/EXP-001_smoke_test_neomundi_outputs.csv",
-    "baseline_outputs": "results/EXP-001/EXP-001_smoke_test_baseline_outputs.csv",
-    "confusion_matrix": "results/EXP-001/EXP-001_smoke_test_confusion_matrix.csv",
-    "error_log": "results/EXP-001/EXP-001_smoke_test_error_log.csv",
-    "report_fr": "results/EXP-001/EXP-001_smoke_test_report_FR.md"
+  "runner": {
+    "file": "scripts/run_exp001_smoke_test.py",
+    "version": "v0.1.1",
+    "execution_workflow": ".github/workflows/run-exp001-smoke-test.yml",
+    "validation_workflow": ".github/workflows/validate-exp001-runner.yml",
+    "api_endpoint": "https://api.neomundi.io/v1/govern",
+    "mode": "OBS",
+    "api_secret_storage": "GITHUB_ACTIONS_REPOSITORY_SECRET",
+    "api_secret_name": "NEOMUNDI_API_KEY",
+    "api_secret_recorded_in_repository": false,
+    "ground_truth_sent_to_neomundi": false
+  },
+
+  "execution": {
+    "github_workflow_name": "Run EXP-001 Smoke Test",
+    "successful_github_run_id": "31266032346",
+    "successful_github_run_number": 2,
+    "successful_github_run_attempt": 1,
+    "started_at": "2026-08-08T16:03:59.959303Z",
+    "completed_at": "2026-08-08T16:10:45.666103Z",
+    "expected_case_count": 20,
+    "processed_case_count": 20,
+    "calculated_signal_count": 20,
+    "unavailable_signal_count": 0,
+    "computation_error_count": 0,
+    "http_success_count": 20,
+    "http_status_observed": 200,
+    "technical_status": "SUCCESS"
+  },
+
+  "prior_execution_attempt": {
+    "workflow_run_number": 1,
+    "status": "FAILED_BEFORE_MEASUREMENT",
+    "signal_count": 0,
+    "computation_error_count": 20,
+    "incident_layer": "HTTP_ACCESS",
+    "http_status": 403,
+    "cloudflare_error_code": 1010,
+    "cloudflare_error_name": "browser_signature_banned",
+    "cause_fr": "La signature HTTP par défaut du premier client Python a été bloquée par Cloudflare avant production de signaux NeoMundi.",
+    "corrective_action": "Runner v0.1.1 avec User-Agent HTTP explicite.",
+    "included_in_successful_confusion_matrix": false
+  },
+
+  "analysis": {
+    "script": "scripts/analyze_exp001_smoke_test.py",
+    "analyzer_version": "v0.2",
+    "workflow": ".github/workflows/analyze-exp001-smoke-test.yml",
+    "source_github_run_id": "31266032346",
+    "analysis_completed_at": "2026-08-08T16:28:42.963478Z",
+    "status": "SUCCESS",
+    "neomundi": {
+      "true_positive": 10,
+      "false_positive": 0,
+      "true_negative": 10,
+      "false_negative": 0,
+      "unavailable": 0,
+      "computation_errors": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "specificity": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "f1": 1.0,
+      "descriptive_accuracy": 1.0,
+      "coverage": 1.0
+    },
+    "independent_baseline": {
+      "true_positive": 10,
+      "false_positive": 0,
+      "true_negative": 10,
+      "false_negative": 0,
+      "undetermined": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "specificity": 1.0,
+      "f1": 1.0,
+      "coverage": 1.0
+    }
+  },
+
+  "score_distribution": {
+    "positive_cases": {
+      "count": 10,
+      "minimum": 0.9,
+      "maximum": 1.0,
+      "mean": 0.99,
+      "median": 1.0
+    },
+    "negative_cases": {
+      "count": 10,
+      "minimum": 0.0,
+      "maximum": 0.0,
+      "mean": 0.0,
+      "median": 0.0
+    }
+  },
+
+  "latency_observation": {
+    "api_latency_ms": {
+      "count": 20,
+      "minimum": 20162.661,
+      "maximum": 20666.552,
+      "mean": 20284.8759,
+      "median": 20186.8015
+    },
+    "api_processing_time_ms": {
+      "count": 20,
+      "minimum": 20018.57,
+      "maximum": 20024.27,
+      "mean": 20020.3325,
+      "median": 20019.975
+    },
+    "interpretation": "DESCRIPTIVE_FOR_THIS_RUN_ONLY"
   },
 
   "environment": {
@@ -202,7 +344,7 @@
     "judge_configuration_variable": "HALLUCINATION_JUDGE_BASE_URL",
     "judge_model_configuration_variable": "HALLUCINATION_MODEL",
     "judge_model": "mistral24b",
-    "judge_model_version": "mistral24b",
+    "judge_model_version": "NOT_SEPARATELY_EXPOSED",
     "judge_endpoint_type": "OPENAI_COMPATIBLE_CHAT_COMPLETIONS",
     "judge_base_url": "https://api.infomaniak.com/2/ai/108205/openai/v1/chat/completions",
     "judge_temperature": 0.1,
@@ -222,12 +364,41 @@
     "fallback_mechanism": "CIRCUIT_BREAKER",
     "fallback_cooldown_seconds": 30,
 
+    "judge_model_exposed_in_govern_response": false,
+    "fallback_information_exposed_in_govern_response": false,
+    "fallback_status_in_results": "UNKNOWN_NOT_EXPOSED",
+
+    "measurement_version_observed": "3.0.0",
+    "normalizer_version_observed": "1.0.0",
+
     "dependencies_file": "requirements.txt",
     "dependency_management": "pip",
     "environment_information_source": "Manal",
     "environment_confirmation_date": "2026-08-08",
     "secrets_recorded_in_manifest": false,
     "environment_recorded": true
+  },
+
+  "expected_outputs": {
+    "neomundi_outputs": "results/EXP-001/EXP-001_smoke_test_neomundi_outputs.csv",
+    "baseline_outputs": "results/EXP-001/EXP-001_smoke_test_baseline_outputs.csv",
+    "confusion_matrix": "results/EXP-001/EXP-001_smoke_test_confusion_matrix.csv",
+    "error_log": "results/EXP-001/EXP-001_smoke_test_error_log.csv",
+    "report_fr": "results/EXP-001/EXP-001_smoke_test_report_FR.md",
+    "artifact_hashes": "results/EXP-001/EXP-001_smoke_test_artifact_hashes.json",
+    "human_review_fr": "results/EXP-001/EXP-001_smoke_test_human_review_FR.md"
+  },
+
+  "artifact_hashes": {
+    "algorithm": "SHA-256",
+    "generated_at": "2026-08-08T16:28:42.963478Z",
+    "corpus": "bd9ac82fd53aab35fba15ff999033f894f69775d256940f27694677720174ce1",
+    "neomundi_outputs": "b2597b843859d1f07cc02321ec8083afeddae256c28688877c088d04af6bc542",
+    "error_log": "e2d5b20f359b724bcc76a2fb18ededf59edb11eee9af10c2da318c6dd31ee255",
+    "baseline_outputs": "491a6598a1da22c15d9a775939496173fb3f4889b908ca25e01b6822eca0ea73",
+    "confusion_matrix": "e64d368d5a32364c63c599a4ab4555b9a26d9abbf479a07aef3f8315259d5e96",
+    "report_fr": "d3a9208a30d9644961e1b71501f6429ca38f6861dbca3d7f9b4c04327acd3028",
+    "human_review_fr": "NOT_RECORDED_IN_ANALYSIS_HASH_MANIFEST"
   },
 
   "authorization": {
@@ -266,7 +437,31 @@
     "execution_authorized": true
   },
 
+  "post_execution_checklist": {
+    "all_cases_processed": true,
+    "all_cases_linked_to_outputs": true,
+    "neomundi_outputs_produced": true,
+    "baseline_outputs_produced": true,
+    "baseline_decision_independent_from_ground_truth": true,
+    "confusion_matrix_produced": true,
+    "error_log_produced": true,
+    "report_produced": true,
+    "artifact_hashes_produced": true,
+    "human_review_completed": true,
+    "false_positive_review_completed": true,
+    "false_negative_review_completed": true,
+    "fallback_limitation_documented": true,
+    "judge_exposure_limitation_documented": true,
+    "general_performance_claim_authorized": false
+  },
+
   "execution_blockers": [],
+
+  "documented_limitations": {
+    "judge_model_not_exposed_per_api_response": true,
+    "fallback_not_exposed_per_api_response": true,
+    "fallback_absence_can_be_asserted": false
+  },
 
   "limitations": [
     "Le corpus est synthétique et composé de cas fermés simples.",
@@ -274,15 +469,43 @@
     "L’équilibre de 10 cas positifs et 10 cas négatifs ne représente pas une prévalence réelle.",
     "Les résultats ne peuvent soutenir aucune affirmation générale de performance.",
     "Le seuil 0.5 est figé pour cette expérience mais n’est ni calibré ni validé.",
-    "Le signal repose sur un modèle juge et peut produire des faux positifs et des faux négatifs.",
-    "Le juge primaire utilise le modèle mistral24b via l’endpoint OpenAI-compatible d’Infomaniak Euria.",
-    "Un mécanisme de fallback automatique vers llama3.1:8b existe en cas d’indisponibilité du juge primaire ; les activations du fallback doivent être enregistrées et analysées séparément.",
+    "Le signal repose sur un modèle juge et peut produire des faux positifs et des faux négatifs sur d’autres corpus.",
+    "Le juge configuré est documenté comme mistral24b, mais son identité n’est pas exposée dans chaque réponse API du run.",
+    "Le fallback est configuré vers llama3.1:8b, mais son activation éventuelle n’est pas exposée dans les réponses API observées.",
+    "UNKNOWN_NOT_EXPOSED ne signifie pas NO_FALLBACK.",
     "Le repository backend est privé et le commit f02f7ff constitue une ancre d’audit interne, pas une preuve publique autonome.",
     "Le repository expérimental est privé et le commit 7b29408 constitue une ancre d’audit interne.",
-    "Une réussite du smoke test confirmerait uniquement le fonctionnement technique de la chaîne expérimentale."
+    "La séparation parfaite observée entre les scores des cas positifs et négatifs est descriptive de ce corpus synthétique contrôlé uniquement.",
+    "Une réussite du smoke test confirme le fonctionnement technique de la chaîne expérimentale et non la validation scientifique générale de MET-003."
   ],
 
+  "non_claims": [
+    "MET-003 n’est pas scientifiquement validé par EXP-001.",
+    "Le seuil 0.5 n’est pas démontré optimal.",
+    "Une performance générale de 100 % ne peut pas être revendiquée.",
+    "Les résultats ne sont pas généralisables aux données naturelles.",
+    "Les résultats ne sont pas généralisables à d’autres langues, domaines ou distributions.",
+    "L’absence d’un signal ne prouve pas qu’une réponse est vraie.",
+    "Un signal ne constitue pas à lui seul une preuve indépendante de fausseté.",
+    "L’absence de fallback ne peut pas être affirmée à partir des réponses API observées.",
+    "Aucun claim commercial général ne peut être dérivé de ce smoke test."
+  ],
+
+  "closure": {
+    "closed": true,
+    "closure_status": "SMOKE_TEST_TECHNICALLY_SUCCESSFUL",
+    "closure_date": "2026-08-08",
+    "closed_by": "Sebastien",
+    "human_review_completed": true,
+    "scientific_validation": false,
+    "metric_validated": false,
+    "threshold_calibrated": false,
+    "performance_generalization_authorized": false,
+    "retroactive_modification_authorized": false,
+    "next_experiment_required_for_further_validation": true
+  },
+
   "next_step": {
-    "fr": "Préparer et vérifier le runner du smoke test avant la première exécution des 20 cas."
+    "fr": "Conserver EXP-001 v0.1 comme smoke test clôturé et préparer une nouvelle expérience versionnée sur un corpus plus large, plus difficile et moins trivial, sans modifier rétrospectivement les éléments gelés ou les résultats de EXP-001."
   }
 }
