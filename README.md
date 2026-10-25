@@ -190,7 +190,7 @@ external-audits/
 
 Audit:
 
-[**Constructive and Independent Methodological Audit — Stéphane Gorius**](./external-audits/Audit_methodologique_constructif_independant_NeoMundi_Kimi_K3_v1.1.pdf)
+[**Constructive and Independent Methodological Audit — Stéphane Gorius**](./external-audits/Audit_methodologique_independant_St%C3%A9phane%20Gorius.pdf)
 
 The following distinction must be preserved:
 
@@ -1354,7 +1354,7 @@ Recommended order:
 
 ## External methodological audit
 
-[**Constructive and Independent Methodological Audit — Stéphane Gorius**](./external-audits/Audit_methodologique_constructif_independant_NeoMundi_Kimi_K3_v1.1.pdf)
+[**Constructive and Independent Methodological Audit — Stéphane Gorius**](./external-audits/Audit_methodologique_independant_St%C3%A9phane%20Gorius.pdf)
 
 ## Working checkpoint
 
