@@ -1,3 +1,5 @@
+> **Explore Evidence:** [pilots, Observatory work, methods and historical sources](https://github.com/neomundi-io/neomundi-station-public/blob/main/EVIDENCE.md). This repository retains its original artifacts and scope. Future Station results will be identified separately.
+
 🇬🇧 **English version:** [README.md](./README.md) · 🇫🇷 **Version française :** [README_FR.md](./README_FR.md)
 
 # NeoMundi Metrology Validation
