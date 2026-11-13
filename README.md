@@ -15,6 +15,8 @@ This repository progressively documents:
 - how they compare with independent references;
 - and which claims the available evidence can actually support.
 
+**Public evaluator disclosure and historical exposure review:** [English](PUBLIC_DISCLOSURE_POLICY.md) · [Français](PUBLIC_DISCLOSURE_POLICY.fr.md). This policy is proposed for review and does not describe current production evaluator configuration.
+
 Core principle:
 
 > **A measured signal is not automatically a verdict.**
