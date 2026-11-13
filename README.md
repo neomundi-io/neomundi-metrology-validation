@@ -16,6 +16,7 @@ This repository progressively documents:
 - and which claims the available evidence can actually support.
 
 **Public evaluator disclosure and historical exposure review:** [English](PUBLIC_DISCLOSURE_POLICY.md) · [Français](PUBLIC_DISCLOSURE_POLICY.fr.md). This policy is proposed for review and does not describe current production evaluator configuration.
+**EXP-001 historical metadata review:** [Disclosure and provenance assessment](EXP001_DISCLOSURE_REVIEW.md). The original frozen manifest remains unchanged.
 
 Core principle:
 
