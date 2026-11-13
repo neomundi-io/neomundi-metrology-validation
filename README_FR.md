@@ -2,6 +2,8 @@
 
 🇫🇷 **Version française :** [README_FR.md](./README_FR.md) · 🇬🇧 **English version:** [README.md](./README.md)
 
+**Divulgation publique des évaluateurs :** [Politique FR](PUBLIC_DISCLOSURE_POLICY.fr.md) · [Policy EN](PUBLIC_DISCLOSURE_POLICY.md). Proposition à relire ; les conditions expérimentales historiques ne prouvent pas la configuration actuelle de production.
+
 # NeoMundi Metrology Validation
 
 Programme expérimental de validation, calibration, reproductibilité et qualification des signaux de mesure NeoMundi.
