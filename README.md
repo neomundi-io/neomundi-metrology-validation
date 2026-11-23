@@ -1,8 +1,18 @@
-> **Explore Evidence:** [pilots, Observatory work, methods and historical sources](https://github.com/neomundi-io/neomundi-station-public/blob/main/EVIDENCE.md). This repository retains its original artifacts and scope. Future Station results will be identified separately.
-
-🇬🇧 **English version:** [README.md](./README.md) · 🇫🇷 **Version française :** [README_FR.md](./README_FR.md)
+<div align="center">
 
 # NeoMundi Metrology Validation
+
+**Measure. Challenge. Reproduce.**
+
+*From observable AI signals to experiments others can inspect.*
+
+[🇬🇧 ![English](https://img.shields.io/badge/EN-English-2563eb?style=flat-square)](README.md) · [🇫🇷 ![Français](https://img.shields.io/badge/FR-Fran%C3%A7ais-2563eb?style=flat-square)](README_FR.md)
+
+![Research](https://img.shields.io/badge/program-experimental-64748b?style=flat-square) ![EXP-001](https://img.shields.io/badge/EXP--001-smoke%20test%20complete-16a34a?style=flat-square) ![EXP-002](https://img.shields.io/badge/EXP--002-not%20started-64748b?style=flat-square)
+
+</div>
+
+> **Explore the evidence:** [pilots, Observatory work, methods and historical sources](https://github.com/neomundi-io/neomundi-station-public/blob/main/EVIDENCE.md). This repository retains its original artifacts and scope. Future Station results will be identified separately.
 
 Experimental program for the validation, calibration, reproducibility, and qualification of NeoMundi measurement signals.
 
