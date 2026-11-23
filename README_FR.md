@@ -1,12 +1,12 @@
 <div align="center">
 
+[![Français](https://img.shields.io/badge/FR-Fran%C3%A7ais-2563eb?style=flat-square)](README_FR.md) · [![English](https://img.shields.io/badge/EN-English-2563eb?style=flat-square)](README.md)
+
 # NeoMundi — Validation métrologique
 
 **Mesurer. Mettre à l'épreuve. Reproduire.**
 
 *Des signaux observables aux expériences que chacun peut examiner.*
-
-[![Français](https://img.shields.io/badge/FR-Fran%C3%A7ais-2563eb?style=flat-square)](README_FR.md) · [![English](https://img.shields.io/badge/EN-English-2563eb?style=flat-square)](README.md)
 
 [![Recherche](https://img.shields.io/badge/programme-exp%C3%A9rimental-64748b?style=flat-square)](#articulation-avec-le-protocole-de-recherche) [![EXP-001](https://img.shields.io/badge/EXP--001-test%20initial%20termin%C3%A9-16a34a?style=flat-square)](#première-étape-de-validation-terminée--exp-001) [![EXP-002](https://img.shields.io/badge/EXP--002-non%20commenc%C3%A9-64748b?style=flat-square)](#exp-002--première-estimation-expérimentale-de-met-003)
 
