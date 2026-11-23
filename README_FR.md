@@ -1,11 +1,21 @@
+<div align="center">
+
+# NeoMundi — Validation métrologique
+
+**Mesurer. Mettre à l'épreuve. Reproduire.**
+
+*Des signaux observables aux expériences que chacun peut examiner.*
+
+[🇫🇷 ![Français](https://img.shields.io/badge/FR-Fran%C3%A7ais-2563eb?style=flat-square)](README_FR.md) · [🇬🇧 ![English](https://img.shields.io/badge/EN-English-2563eb?style=flat-square)](README.md)
+
+![Recherche](https://img.shields.io/badge/programme-exp%C3%A9rimental-64748b?style=flat-square) ![EXP-001](https://img.shields.io/badge/EXP--001-test%20initial%20termin%C3%A9-16a34a?style=flat-square) ![EXP-002](https://img.shields.io/badge/EXP--002-non%20commenc%C3%A9-64748b?style=flat-square)
+
+</div>
+
 > **Explorer les preuves :** [pilotes, Observatoire, méthodes et travaux historiques](https://github.com/neomundi-io/neomundi-station-public/blob/main/EVIDENCE.fr.md). Ce dépôt conserve ses pièces et son périmètre d'origine. Les futurs résultats Station seront distingués de ces travaux.
 
-🇫🇷 **Version française :** [README_FR.md](./README_FR.md) · 🇬🇧 **English version:** [README.md](./README.md)
-
-**Divulgation publique des évaluateurs :** [Politique FR](PUBLIC_DISCLOSURE_POLICY.fr.md) · [Policy EN](PUBLIC_DISCLOSURE_POLICY.md). Proposition à relire ; les conditions expérimentales historiques ne prouvent pas la configuration actuelle de production.
+**Divulgation publique des évaluateurs :** [Politique en français](PUBLIC_DISCLOSURE_POLICY.fr.md). Proposition à relire ; les conditions expérimentales historiques ne prouvent pas la configuration actuelle de production.
 **Revue historique EXP-001 :** [Exposition des métadonnées et provenance](EXP001_DISCLOSURE_REVIEW.fr.md). Le manifeste expérimental figé reste inchangé.
-
-# NeoMundi Metrology Validation
 
 Programme expérimental de validation, calibration, reproductibilité et qualification des signaux de mesure NeoMundi.
 
